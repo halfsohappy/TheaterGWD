@@ -156,6 +156,7 @@ gooey --no-browser              # Don't auto-open browser
 | **[Homebrew Guide](docs/homebrew.md)** | Homebrew-specific setup, updating, and troubleshooting |
 | **[Quick Start](docs/quickstart.md)** | First-time walkthrough of the UI |
 | **[Troubleshooting](docs/troubleshooting.md)** | Common issues and solutions |
+| **[Ox64 Deployment](../Ox64/README.md)** | Headless setup and systemd service on a Sipeed Ox64 (Allwinner D1s, RISC-V) |
 | **[User Guide](../docs/user_guide.md)** | Full TheaterGWD user guide |
 | **[Technical Guide](../docs/technical_guide.md)** | Architecture and protocol details |
 
