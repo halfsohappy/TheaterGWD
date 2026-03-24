@@ -70,7 +70,7 @@ The project uses **PlatformIO** with the **Arduino framework** for
 
 ```ini
 [env:esp32-s3-devkitc-1]
-platform  = espressif32
+platform  = https://github.com/platformio/platform-espressif32.git#v6.6.0
 board     = esp32-s3-devkitc-1
 framework = arduino
 
@@ -89,6 +89,11 @@ lib_deps =
 **Build command:** `pio run` (or use the PlatformIO IDE).
 
 **Upload command:** `pio run -t upload` (via USB/esptool).
+
+If the PlatformIO registry is unreachable in your environment, the platform
+definition is pulled directly from GitHub (see `platform` line above). Tool and
+framework packages will still download on first build, so use a persistent
+PlatformIO cache on your CI runner to avoid repeated fetches.
 
 ---
 
