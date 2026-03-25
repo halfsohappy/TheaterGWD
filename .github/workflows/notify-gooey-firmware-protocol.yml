@@ -1,0 +1,73 @@
+# Notify Gooey repo when the firmware OSC protocol documentation changes.
+#
+# When docs/firmware-osc-protocol.md is updated on the main branch this
+# workflow sends a repository_dispatch event to the Gooey repository so
+# its "Sync Firmware Protocol" workflow can open an update PR automatically.
+#
+# Required secrets (set in TheaterGWD repo settings):
+#   GOOEY_REPO_TOKEN — a GitHub personal access token (classic) or a
+#                      fine-grained token with:
+#                        • Repository: halfsohappy/gooey  (adjust if renamed)
+#                        • Permission: Contents — Read and Write
+#                        • Permission: Actions — Write  (to trigger dispatch)
+#
+# If the Gooey repo is not yet created, this workflow will simply fail
+# gracefully and can be re-enabled once the repo exists.
+
+name: Notify Gooey — Firmware Protocol Updated
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/firmware-osc-protocol.md"
+      - "src/osc_commands.h"
+      - "src/osc_message.h"
+      - "src/osc_patch.h"
+      - "src/osc_registry.h"
+      - "src/data_streams.h"
+      - "ab7/src/osc_commands.h"
+      - "ab7/src/osc_message.h"
+      - "ab7/src/osc_patch.h"
+      - "ab7/src/osc_registry.h"
+      - "ab7/src/data_streams.h"
+
+jobs:
+  notify-gooey:
+    name: Dispatch sync event to Gooey repo
+    runs-on: ubuntu-latest
+    permissions: {}   # This job uses GOOEY_REPO_TOKEN; no GITHUB_TOKEN permissions needed.
+
+    steps:
+      - name: Send repository_dispatch to Gooey
+        env:
+          GOOEY_REPO_TOKEN: ${{ secrets.GOOEY_REPO_TOKEN }}
+          # Update this to the actual Gooey repository slug once it exists.
+          GOOEY_REPO: halfsohappy/gooey
+        run: |
+          if [ -z "$GOOEY_REPO_TOKEN" ]; then
+            echo "::warning::GOOEY_REPO_TOKEN secret is not set — skipping dispatch."
+            echo "Create the secret and re-run this workflow once the Gooey repo exists."
+            exit 0
+          fi
+
+          PAYLOAD=$(jq -n \
+            --arg ref "$GITHUB_SHA" \
+            --arg actor "$GITHUB_ACTOR" \
+            '{"event_type":"firmware-protocol-updated","client_payload":{"ref":$ref,"triggered_by":$actor}}')
+
+          HTTP_STATUS=$(curl -s -o /tmp/dispatch_response.json -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $GOOEY_REPO_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GOOEY_REPO/dispatches" \
+            -d "$PAYLOAD")
+
+          if [ "$HTTP_STATUS" -eq 204 ]; then
+            echo "Dispatch sent successfully to $GOOEY_REPO."
+          else
+            echo "::error::Dispatch failed with HTTP $HTTP_STATUS"
+            cat /tmp/dispatch_response.json
+            exit 1
+          fi

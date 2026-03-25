@@ -1,0 +1,156 @@
+# Sync Firmware Protocol from TheaterGWD
+#
+# This workflow fetches docs/firmware-osc-protocol.md from the TheaterGWD
+# repository and replaces the section between the FIRMWARE_PROTOCOL_START /
+# FIRMWARE_PROTOCOL_END markers in .github/copilot-instructions.md.
+#
+# Usage:
+#   • Run manually via "Actions → Sync Firmware Protocol → Run workflow".
+#   • Can also be triggered automatically from the TheaterGWD repo via a
+#     repository_dispatch event (see the companion workflow there).
+#
+# Required secrets (set in the Gooey repo settings):
+#   THEATERGWD_TOKEN — a GitHub personal access token with `contents:read`
+#                      scope on the halfsohappy/TheaterGWD repository.
+#                      If TheaterGWD is public, use ${{ github.token }}
+#                      and remove the secret entirely.
+
+name: Sync Firmware Protocol
+
+on:
+  workflow_dispatch:
+    inputs:
+      theatergwd_ref:
+        description: "TheaterGWD branch / tag / SHA to sync from (default: main)"
+        required: false
+        default: "main"
+  repository_dispatch:
+    types: [firmware-protocol-updated]
+
+jobs:
+  sync:
+    name: Fetch and embed firmware protocol
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout Gooey repo
+        uses: actions/checkout@v4
+
+      - name: Resolve source ref
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "ref=${{ github.event.client_payload.ref || 'main' }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ inputs.theatergwd_ref || 'main' }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download firmware-osc-protocol.md from TheaterGWD
+        env:
+          # Use THEATERGWD_TOKEN if set; fall back to the built-in token when
+          # TheaterGWD is a public repository.
+          GH_TOKEN: ${{ secrets.THEATERGWD_TOKEN || github.token }}
+        run: |
+          curl -fsSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github.raw" \
+            "https://api.github.com/repos/halfsohappy/TheaterGWD/contents/docs/firmware-osc-protocol.md?ref=${{ steps.ref.outputs.ref }}" \
+            -o /tmp/firmware-osc-protocol.md
+          echo "Downloaded $(wc -l < /tmp/firmware-osc-protocol.md) lines"
+
+      - name: Update copilot-instructions.md
+        run: |
+          INSTRUCTIONS=".github/copilot-instructions.md"
+          PROTOCOL="/tmp/firmware-osc-protocol.md"
+
+          if [ ! -f "$INSTRUCTIONS" ]; then
+            echo "::error::$INSTRUCTIONS not found"
+            exit 1
+          fi
+
+          # Verify markers are present
+          if ! grep -q "FIRMWARE_PROTOCOL_START" "$INSTRUCTIONS"; then
+            echo "::error::FIRMWARE_PROTOCOL_START marker not found in $INSTRUCTIONS"
+            exit 1
+          fi
+
+          python3 - "$INSTRUCTIONS" "$PROTOCOL" <<'EOF'
+          import sys, re, pathlib
+
+          instructions_path = pathlib.Path(sys.argv[1])
+          protocol_path     = pathlib.Path(sys.argv[2])
+
+          instructions = instructions_path.read_text()
+          protocol_raw = protocol_path.read_text()
+
+          # Strip the title line and the "source of truth" notice block from
+          # the protocol file (everything up to and including the first ---
+          # horizontal rule) so the content embeds cleanly.
+          protocol_body = re.sub(
+              r'^.*?^---\s*\n',
+              '',
+              protocol_raw,
+              count=1,
+              flags=re.DOTALL | re.MULTILINE,
+          ).strip()
+
+          # Wrap in markers with a single blank line of padding.
+          replacement = (
+              "<!-- FIRMWARE_PROTOCOL_START -->\n"
+              + "## 8. Firmware OSC Protocol\n\n"
+              + "> This section is auto-synced from `docs/firmware-osc-protocol.md` in the\n"
+              + "> [TheaterGWD](https://github.com/halfsohappy/TheaterGWD) repository.\n"
+              + "> Do not edit it here directly — run the **Sync Firmware Protocol** workflow\n"
+              + "> to pull the latest version.\n\n"
+              + protocol_body
+              + "\n\n<!-- FIRMWARE_PROTOCOL_END -->"
+          )
+
+          updated, n_subs = re.subn(
+              r'<!-- FIRMWARE_PROTOCOL_START -->.*?<!-- FIRMWARE_PROTOCOL_END -->',
+              replacement,
+              instructions,
+              flags=re.DOTALL,
+          )
+
+          if n_subs == 0:
+              # Markers were present (checked above) but subn returned 0 — this
+              # should not happen; treat it as a hard error so the CI step fails
+              # visibly rather than silently producing no PR.
+              print("ERROR: marker pattern found but replacement made 0 substitutions.", file=sys.stderr)
+              sys.exit(1)
+          elif updated == instructions:
+              print("No changes detected.")
+          else:
+              instructions_path.write_text(updated)
+              print(f"Updated successfully ({n_subs} substitution(s)).")
+          EOF
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet .github/copilot-instructions.md; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "docs: sync firmware OSC protocol from TheaterGWD (${{ steps.ref.outputs.ref }})"
+          branch: "chore/sync-firmware-protocol"
+          delete-branch: true
+          title: "docs: sync firmware OSC protocol from TheaterGWD"
+          body: |
+            Automated sync of the firmware OSC protocol documentation from
+            [TheaterGWD](https://github.com/halfsohappy/TheaterGWD/blob/${{ steps.ref.outputs.ref }}/docs/firmware-osc-protocol.md)
+            (ref: `${{ steps.ref.outputs.ref }}`).
+
+            Review the diff to ensure the AI agent instructions are still accurate
+            after the firmware changes.
+          labels: "documentation,automated"
