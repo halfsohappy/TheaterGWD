@@ -39,7 +39,7 @@ static bool net_has_credentials() {
 
 static void net_load() {
     Preferences prefs;
-    prefs.begin(NVS_NAMESPACE, true);  // read-only
+    prefs.begin(NVS_NAMESPACE, false); // read-write so namespace is created on first boot
     String s;
     s = prefs.getString("ssid", "");
     s.toCharArray(net_ssid, sizeof(net_ssid));

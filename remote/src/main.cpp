@@ -68,6 +68,9 @@ void setup() {
                   target_port);
 
     // ── Connect WiFi ────────────────────────────────────────────────────
+    // Always start the WiFi stack in STA mode so the lwIP TCP/IP task
+    // and its mailboxes are initialised before osc_init() calls _udp.begin().
+    WiFi.mode(WIFI_STA);
     if (net_has_credentials()) {
         net_connect();
         disp_clear();
