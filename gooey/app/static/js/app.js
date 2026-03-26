@@ -263,6 +263,8 @@
       caret.textContent = "▾";
       btn.appendChild(caret);
       btn.addEventListener("click", function (e) {
+        /* Capture position before renderDeviceTabs() removes this element */
+        var rect = btn.getBoundingClientRect();
         /* Select device as active */
         activeDeviceId = id;
         renderDeviceTabs();
@@ -272,7 +274,7 @@
         refreshAllDropdowns();
         refreshQueryDeviceSelect();
         /* Show per-device dropdown menu */
-        openDevDropdown(btn, id);
+        openDevDropdown(rect, id);
       });
       container.insertBefore(btn, devActions);
     });
@@ -363,12 +365,11 @@
 
   var _dropdownDeviceId = "";
 
-  function openDevDropdown(btn, deviceId) {
+  function openDevDropdown(rect, deviceId) {
     var d = devices[deviceId];
     if (!d) return;
     _dropdownDeviceId = deviceId;
     var dd = $("#devDropdown");
-    var rect = btn.getBoundingClientRect();
     dd.style.top = (rect.bottom + 2) + "px";
     dd.style.left = rect.left + "px";
     dd.style.display = "block";
