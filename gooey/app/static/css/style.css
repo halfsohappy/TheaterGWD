@@ -2615,6 +2615,7 @@ html.dark .script-ref-content code {
 .bulk-input {
   flex: 1 1 0;
   min-width: 80px;
+  width: auto;
   padding: 0.3rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -2627,6 +2628,7 @@ html.dark .script-ref-content code {
 .bulk-input.has-pattern { border-color: var(--accent); background: var(--accent-dim); }
 .bulk-select {
   flex: 0 0 auto;
+  width: auto;
   padding: 0.3rem 0.4rem;
   border: 1px solid var(--border);
   border-radius: 4px;
