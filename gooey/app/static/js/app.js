@@ -1770,18 +1770,22 @@
      ═══════════════════════════════════════════ */
 
   /* Config preview update */
+  function previewPair(key, val) {
+    if (val.charAt(0) === ">") return key + "-" + val.substring(1);
+    return key + ":" + val;
+  }
   function updateMsgPreview() {
     var a = ($("#msgAdr") ? $("#msgAdr").value.trim() : "");
     var adrEl = $("#msgPreviewAdr");
     var cfgEl = $("#msgPreviewCfg");
-    if (adrEl) adrEl.textContent = a ? "adr: " + a : "(no address)";
+    if (adrEl) adrEl.textContent = a ? previewPair("adr", a) : "(no address)";
     var parts = [];
-    var v = $("#msgValue").value; if (v) parts.push("value:" + v);
-    var ip = $("#msgIP").value.trim(); if (ip) parts.push("ip:" + ip);
-    var port = $("#msgPort").value; if (port) parts.push("port:" + port);
-    var lo = $("#msgLow").value.trim(); if (lo) parts.push("low:" + lo);
-    var hi = $("#msgHigh").value.trim(); if (hi) parts.push("high:" + hi);
-    var pa = $("#msgScene").value.trim(); if (pa) parts.push("scene:" + pa);
+    var v = $("#msgValue").value; if (v) parts.push(previewPair("value", v));
+    var ip = $("#msgIP").value.trim(); if (ip) parts.push(previewPair("ip", ip));
+    var port = $("#msgPort").value; if (port) parts.push(previewPair("port", port));
+    var lo = $("#msgLow").value.trim(); if (lo) parts.push(previewPair("low", lo));
+    var hi = $("#msgHigh").value.trim(); if (hi) parts.push(previewPair("high", hi));
+    var pa = $("#msgScene").value.trim(); if (pa) parts.push(previewPair("scene", pa));
     var oo = $("#msgOriOnly").value.trim(); if (oo) parts.push("ori_only:" + oo);
     var on = $("#msgOriNot").value.trim(); if (on) parts.push("ori_not:" + on);
     var tn = $("#msgTernori").value.trim(); if (tn) parts.push("ternori:" + tn);
@@ -2653,12 +2657,12 @@
     var cfgEl = $("#scenePreviewCfg");
     if (adrEl) adrEl.textContent = name ? "scene: " + name : "(no scene name)";
     var parts = [];
-    var ip = ($("#sceneIP").value || "").trim(); if (ip) parts.push("ip:" + ip);
-    var port = ($("#scenePort").value || "").trim(); if (port) parts.push("port:" + port);
-    var sceneAdr = ($("#sceneAdr").value || "").trim(); if (sceneAdr) parts.push("adr:" + sceneAdr);
-    var low = ($("#sceneLow").value || "").trim(); if (low) parts.push("low:" + low);
-    var high = ($("#sceneHigh").value || "").trim(); if (high) parts.push("high:" + high);
-    var period = ($("#scenePeriod").value || "").trim(); if (period) parts.push("period:" + period);
+    var ip = ($("#sceneIP").value || "").trim(); if (ip) parts.push(previewPair("ip", ip));
+    var port = ($("#scenePort").value || "").trim(); if (port) parts.push(previewPair("port", port));
+    var sceneAdr = ($("#sceneAdr").value || "").trim(); if (sceneAdr) parts.push(previewPair("adr", sceneAdr));
+    var low = ($("#sceneLow").value || "").trim(); if (low) parts.push(previewPair("low", low));
+    var high = ($("#sceneHigh").value || "").trim(); if (high) parts.push(previewPair("high", high));
+    var period = ($("#scenePeriod").value || "").trim(); if (period) parts.push(previewPair("period", period));
     var mode = ($("#sceneAdrMode").value || "").trim(); if (mode) parts.push("adrMode:" + mode);
     var ovParts = [];
     if ($("#ovIP").checked) ovParts.push("ip");
