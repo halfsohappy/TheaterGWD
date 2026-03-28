@@ -1771,7 +1771,7 @@
 
   /* Config preview update */
   function previewPair(key, val) {
-    if (val.charAt(0) === ">") return key + "-" + val.substring(1);
+    if (val.charAt(0) === ">") return key + ">" + val.substring(1);
     return key + ":" + val;
   }
   function updateMsgPreview() {
@@ -1786,9 +1786,9 @@
     var lo = $("#msgLow").value.trim(); if (lo) parts.push(previewPair("low", lo));
     var hi = $("#msgHigh").value.trim(); if (hi) parts.push(previewPair("high", hi));
     var pa = $("#msgScene").value.trim(); if (pa) parts.push(previewPair("scene", pa));
-    var oo = $("#msgOriOnly").value.trim(); if (oo) parts.push("ori_only:" + oo);
-    var on = $("#msgOriNot").value.trim(); if (on) parts.push("ori_not:" + on);
-    var tn = $("#msgTernori").value.trim(); if (tn) parts.push("ternori:" + tn);
+    var oo = $("#msgOriOnly").value.trim(); if (oo) parts.push(previewPair("ori_only", oo));
+    var on = $("#msgOriNot").value.trim(); if (on) parts.push(previewPair("ori_not", on));
+    var tn = $("#msgTernori").value.trim(); if (tn) parts.push(previewPair("ternori", tn));
     if (cfgEl) cfgEl.textContent = parts.join(", ");
   }
 
@@ -1806,12 +1806,12 @@
     function resolveName(val, ori) {
       return val.toLowerCase() === "name" ? (ori ? "ori_" + name : "/" + name) : val;
     }
-    /* Build key:value or key-refName pairs.
+    /* Build key:value or key>refName pairs.
        If a field value starts with ">", the rest is a registry reference name
-       and the separator becomes "-" instead of ":" (firmware key-refName syntax).
-       Example: typing ">myScene" in the IP field sends "ip-myScene". */
+       and the separator becomes ">" instead of ":" (firmware key>refName syntax).
+       Example: typing ">myScene" in the IP field sends "ip>myScene". */
     function cfgPair(key, val) {
-      if (val.charAt(0) === ">") return key + "-" + val.substring(1);
+      if (val.charAt(0) === ">") return key + ">" + val.substring(1);
       return key + ":" + val;
     }
     var parts = [];
@@ -1822,9 +1822,9 @@
     var lo = $("#msgLow").value.trim(); if (lo) parts.push(cfgPair("low", lo));
     var hi = $("#msgHigh").value.trim(); if (hi) parts.push(cfgPair("high", hi));
     var pa = $("#msgScene").value.trim(); if (pa) parts.push(cfgPair("scene", pa));
-    var oo = $("#msgOriOnly").value.trim(); if (oo) parts.push("ori_only:" + resolveName(oo, true));
-    var on = $("#msgOriNot").value.trim(); if (on) parts.push("ori_not:" + resolveName(on, true));
-    var tn = $("#msgTernori").value.trim(); if (tn) parts.push("ternori:" + resolveName(tn, true));
+    var oo = $("#msgOriOnly").value.trim(); if (oo) parts.push(cfgPair("ori_only", resolveName(oo, true)));
+    var on = $("#msgOriNot").value.trim(); if (on) parts.push(cfgPair("ori_not", resolveName(on, true)));
+    var tn = $("#msgTernori").value.trim(); if (tn) parts.push(cfgPair("ternori", resolveName(tn, true)));
     var cfg = parts.join(", ");
     var address = addr("/annieData/{device}/msg/{name}", name);
     sendCmd(address, cfg || null).then(function (res) {
@@ -1911,9 +1911,9 @@
     if ($("#ovHigh").checked) ovParts.push("high");
 
     /* Build assign config and send primary scene config command.
-       Prefix ">" in a field value triggers registry reference syntax (key-refName). */
+       Prefix ">" in a field value triggers registry reference syntax (key>refName). */
     function cfgPairS(key, val) {
-      if (val.charAt(0) === ">") return key + "-" + val.substring(1);
+      if (val.charAt(0) === ">") return key + ">" + val.substring(1);
       return key + ":" + val;
     }
     var cfgParts = [];
