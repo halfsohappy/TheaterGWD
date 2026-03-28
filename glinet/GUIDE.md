@@ -50,12 +50,8 @@ Do this on your regular computer before touching the router.
 
 1. Install [PlatformIO](https://platformio.org/) (VS Code extension or CLI)
 2. Clone this repository and open it
-3. Copy the appropriate Teensy config into `platformio.ini`:
+3. Copy the Teensy 4.0 config into `platformio.ini`:
    ```bash
-   # For Teensy 4.1 (recommended)
-   cp platforms/platformio.teensy41.ini platformio.ini
-
-   # For Teensy 4.0
    cp platforms/platformio.teensy40.ini platformio.ini
    ```
 4. Plug the Teensy into your computer and flash:
