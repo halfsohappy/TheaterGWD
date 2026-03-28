@@ -314,6 +314,18 @@
     /* Show/hide welcome banner based on device count */
     var wb = $("#welcomeBanner");
     if (wb) wb.style.display = devCount === 0 ? "" : "none";
+    /* Scale font size up when few devices; wrap to 2 rows when space saturated */
+    if (container) {
+      var fontSize = devCount <= 2 ? "15px" : devCount <= 4 ? "14px" : "13px";
+      container.style.setProperty("--dev-tab-font", fontSize);
+      container.classList.remove("wrap-2row");
+      /* Defer saturation check until layout is done */
+      requestAnimationFrame(function () {
+        if (container.scrollWidth > container.clientWidth + 4) {
+          container.classList.add("wrap-2row");
+        }
+      });
+    }
     /* Update onboarding steps */
     updateOnboarding();
     /* Update feed device filter */
@@ -3336,7 +3348,7 @@
       {
         sel: ".section-nav",
         title: "Main Tabs",
-        body: "Switch between the six main sections: <strong>Messages</strong>, <strong>Scenes</strong>, <strong>Ori</strong>, <strong>Shows</strong>, <strong>Direct</strong>, and <strong>Advanced</strong>."
+        body: "Switch between the main sections: <strong>Messages</strong>, <strong>Scenes</strong>, <strong>Ori</strong>, <strong>Shows</strong>, and <strong>Advanced</strong>."
       },
       {
         sel: '.nav-btn[data-section="messages"]',
@@ -3522,6 +3534,23 @@
      PYTHON TAB
      ═══════════════════════════════════════════ */
   (function () {
+    /* ── Bulk Actions toggle ── */
+    (function () {
+      var BULK_KEY = "gooey_bulk_actions";
+      var chkBulk = $("#chkShowBulkActions");
+      function setBulkVisible(on) {
+        document.body.classList.toggle("bulk-actions-visible", on);
+        try { localStorage.setItem(BULK_KEY, on ? "1" : "0"); } catch (e) {}
+      }
+      var saved = null;
+      try { saved = localStorage.getItem(BULK_KEY); } catch (e) {}
+      if (saved === "1") {
+        if (chkBulk) chkBulk.checked = true;
+        setBulkVisible(true);
+      }
+      if (chkBulk) chkBulk.addEventListener("change", function () { setBulkVisible(chkBulk.checked); });
+    }());
+
     var SCRIPT_KEY = "gooey_script_enabled";
     var SCRIPT_DRAFT_KEY = "gooey_script_draft";
     var SCRIPT_NAME_KEY = "gooey_script_name";

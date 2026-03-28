@@ -1004,20 +1004,29 @@ input[type="color"] {
 .dev-tabs-wrap {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+/* Two-row layout kicks in only when JS detects saturation */
+.dev-tabs-wrap.wrap-2row {
   display: grid;
   grid-template-rows: 1fr 1fr;
   grid-auto-flow: column;
   grid-auto-columns: max-content;
   justify-content: start;
   gap: 4px 5px;
-  padding: 6px 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  align-items: unset;
+  flex-wrap: unset;
 }
 
 .dev-tab {
   font-family: var(--font);
-  font-size: 13px;
+  font-size: var(--dev-tab-font, 13px);
   font-weight: 400;
   padding: 0 13px;
   max-width: 180px;
@@ -2585,6 +2594,9 @@ html.dark .script-ref-content code {
 
 /* ── Bulk action row (pattern matching) ─── */
 .bulk-action-row {
+  display: none;
+}
+.bulk-actions-visible .bulk-action-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
