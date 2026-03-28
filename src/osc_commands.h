@@ -96,6 +96,10 @@
 //   cancel                 — discard recording without saving
 //   status                 — reply: active, name, sample_count, elapsed_ms
 //
+// ── FLUSH COMMAND (/annieData{dev}/flush) ──────────────────────────────────
+//   Replies "OK" once all preceding commands have been processed.
+//   Used by gooey for transactional library-to-device push.
+//
 // ── SHOW COMMANDS (/annieData{dev}/show/...) ────────────────────────────────
 //   save/{name}            — snapshot current state as named show in NVS
 //   load/{name}            — load named show (two-step: pending → confirm)
@@ -354,8 +358,7 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
         // Add the message to the scene (no-op if already there).
         int mi = reg.msg_index(m);
         p->add_msg(mi);
-        m->scene = p;
-        m->exist.scene = true;
+        m->add_scene(p);
 
         // Start the scene (stop first if already running to pick up changes).
         if (p->task_handle) {
@@ -660,15 +663,15 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
 
         int mi = reg.msg_index(m);
 
-        // Remove from current scene (if any).
-        if (m->scene) {
-            m->scene->remove_msg(mi);
+        // Remove from all current scenes.
+        for (uint8_t si = 0; si < m->scene_count; si++) {
+            if (m->scenes[si]) m->scenes[si]->remove_msg(mi);
         }
+        m->clear_scenes();
 
         // Add to new scene.
         p->add_msg(mi);
-        m->scene = p;
-        m->exist.scene = true;
+        m->add_scene(p);
 
         status_reporter().info("cmd", "Moved msg '" + msg_name
                                + "' → scene '" + scene_name + "'");
@@ -1245,6 +1248,14 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
         return;
     }
 
+    // ── FLUSH COMMAND (/annieData{dev}/flush) ────────────────────────────────
+    //    Since commands are processed sequentially, /flush arriving means all
+    //    preceding commands have been handled.  Reply immediately.
+    if (norm_adr == "/flush") {
+        osc_reply(sender_ip, sender_port, reply_adr + "/flush", "OK");
+        return;
+    }
+
     // ── SHOW COMMANDS (/annieData{dev}/show/...) ────────────────────────────
     //    show/save/{name}    — snapshot current RAM state as a named NVS show
     //    show/load/{name}    — two-step: set pending, wait for confirm
@@ -1313,7 +1324,6 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
             pending_show_ms   = 0;
             int n = nvs_load_show(sname);
             if (n >= 0) {
-                nvs_set_active_show(sname);
                 status_reporter().info("show", "Loaded show '" + sname
                                       + "' (" + String(n) + " objects)");
                 osc_reply(sender_ip, sender_port, reply_adr + "/show/load/confirm",
@@ -1386,8 +1396,6 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
                 return;
             }
             if (nvs_delete_show(show_name)) {
-                // Clear active show if it was the one deleted.
-                if (nvs_get_active_show() == show_name) nvs_set_active_show("");
                 status_reporter().info("show", "Deleted show '" + show_name + "'");
                 osc_reply(sender_ip, sender_port, reply_adr + "/show/delete",
                           "Deleted: " + show_name);
@@ -1419,7 +1427,6 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
                 return;
             }
             if (nvs_rename_show(old_name, new_name)) {
-                if (nvs_get_active_show() == old_name) nvs_set_active_show(new_name);
                 status_reporter().info("show", "Renamed show '" + old_name
                                       + "' → '" + new_name + "'");
                 osc_reply(sender_ip, sender_port, reply_adr + "/show/rename",
@@ -1727,8 +1734,7 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
                 }
                 int mi = reg.msg_index(m);
                 p->add_msg(mi);
-                m->scene = p;
-                m->exist.scene = true;
+                m->add_scene(p);
                 status_reporter().debug("scene", "Added msg '" + mname + "' to scene '" + name_mp + "'");
             }
             status_reporter().info("scene", "addmsg complete for '" + name_mp + "'");
@@ -1750,10 +1756,7 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
             } else {
                 int mi = reg.msg_index(m);
                 p->remove_msg(mi);
-                if (m->scene == p) {
-                    m->scene = nullptr;
-                    m->exist.scene = false;
-                }
+                m->remove_scene(p);
                 status_reporter().info("scene", "Removed msg '" + mname
                                        + "' from scene '" + name_mp + "'");
             }
@@ -2012,10 +2015,12 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
                 m->name = name_mp;
                 m->exist.name = true;
 
-                // If a scene was specified, auto-add to that scene.
-                if (m->exist.scene && m->scene) {
+                // If scenes were specified, auto-add to those scenes.
+                if (m->scene_count > 0) {
                     int mi = reg.msg_index(m);
-                    m->scene->add_msg(mi);
+                    for (uint8_t si = 0; si < m->scene_count; si++) {
+                        if (m->scenes[si]) m->scenes[si]->add_msg(mi);
+                    }
                 }
             }
             status_reporter().info("msg", "Message '" + name_mp + "' updated");

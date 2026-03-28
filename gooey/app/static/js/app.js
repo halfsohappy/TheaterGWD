@@ -642,6 +642,34 @@
     return api("send", data);
   }
 
+  /* ── Flush: send /flush and wait for the device's reply in the feed ── */
+  var _flushResolvers = [];
+  function _onFlushReply(entry) {
+    if (entry.direction !== "recv") return;
+    if (!entry.address || !/\/flush$/i.test(entry.address)) return;
+    var resolvers = _flushResolvers.splice(0);
+    resolvers.forEach(function (r) { r(); });
+  }
+
+  /**
+   * Send /flush and return a promise that resolves when the device replies.
+   * Falls back to a 2s timeout if no reply is received (e.g. old firmware).
+   */
+  function sendFlush() {
+    return new Promise(function (resolve) {
+      var timer = setTimeout(function () {
+        var idx = _flushResolvers.indexOf(resolve);
+        if (idx >= 0) _flushResolvers.splice(idx, 1);
+        resolve();
+      }, 2000);
+      _flushResolvers.push(function () {
+        clearTimeout(timer);
+        resolve();
+      });
+      sendCmd(addr("/annieData/{device}/flush"), null);
+    });
+  }
+
   /** Build an OSC address from a template, substituting {device} and {name}. */
   function addr(template, name) {
     var a = template.replace("{device}", devName());
@@ -1655,6 +1683,7 @@
       prevSceneCount = Object.keys(preDev.scenes || {}).length;
     }
     parseReplyIntoRegistry(entry);
+    _onFlushReply(entry);
     /* Show query feedback toast after list/all replies add new data */
     if (matchedDevId && devices[matchedDevId] && /\/list\/(all|msgs|messages)/i.test(entry.address || "")) {
       var postDev = devices[matchedDevId];
@@ -2908,15 +2937,15 @@
         });
       }
     });
-    /* Then save to device NVS as named show */
-    setTimeout(function () {
+    /* Wait for device to finish processing all commands, then save as show */
+    sendFlush().then(function () {
       sendCmd(addr("/annieData/{device}/show/save/" + name), null).then(function () {
-        toast("Loaded library show '" + name + "' to device", "success");
+        toast("Pushed library show '" + name + "' to device", "success");
         sendCmd(addr("/annieData/{device}/list/all"), null);
         sendCmd(addr("/annieData/{device}/ori/list"), null);
         sendCmd(addr("/annieData/{device}/show/list"), null);
       });
-    }, 600);
+    });
   }
 
   /* Wire up show buttons */
