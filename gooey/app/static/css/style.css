@@ -2469,7 +2469,7 @@ body.serial-open .app-layout { padding-bottom: 0; }
 }
 
 /* ═══════════════════════════════════════════
-   SCRIPT TAB
+   PYTHON TAB
    ═══════════════════════════════════════════ */
 
 .script-editor-wrap {
@@ -2478,7 +2478,7 @@ body.serial-open .app-layout { padding-bottom: 0; }
   border-radius: 6px;
   overflow: hidden;
   margin: 8px 0;
-  background: var(--input-bg, #fff);
+  background: var(--bg-input, #fff);
   font-family: "SF Mono", "Cascadia Code", "Fira Code", "Consolas", monospace;
   font-size: 13px;
   line-height: 1.5;
@@ -2513,7 +2513,7 @@ body.serial-open .app-layout { padding-bottom: 0; }
   tab-size: 4;
   white-space: pre;
   overflow: auto;
-  background: var(--input-bg, #fff);
+  background: var(--bg-input, #fff);
   color: var(--text-dark, #2A2F36);
 }
 
@@ -2575,7 +2575,7 @@ html.dark .script-line-numbers {
 }
 
 html.dark .script-editor {
-  background: var(--input-bg);
+  background: var(--bg-input);
   color: var(--text-dark);
 }
 
