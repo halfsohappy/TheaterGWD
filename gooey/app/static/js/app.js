@@ -2626,6 +2626,50 @@
         div.innerHTML = '<span class="ref-term">' + esc(key) + '</span> <span class="ref-def">' + esc(ams[key]) + '</span>';
         amContainer.appendChild(div);
       });
+
+      /* OSC Pattern Matching */
+      var pmContainer = $("#patternMatchList");
+      var pm = presets.pattern_matching;
+      if (pm && pmContainer) {
+        var desc = document.createElement("div");
+        desc.className = "ref-item";
+        desc.innerHTML = '<span class="ref-def">' + esc(pm.description) + '</span>';
+        pmContainer.appendChild(desc);
+
+        var where = document.createElement("div");
+        where.className = "ref-item";
+        where.innerHTML = '<span class="ref-term">Where</span> <span class="ref-def">' + esc(pm.supported_in) + '</span>';
+        pmContainer.appendChild(where);
+
+        var pHeading = document.createElement("div");
+        pHeading.className = "ref-category-title";
+        pHeading.textContent = "Patterns";
+        pmContainer.appendChild(pHeading);
+        Object.keys(pm.patterns).forEach(function (p) {
+          var div = document.createElement("div");
+          div.className = "ref-item";
+          div.innerHTML = '<span class="ref-term">' + esc(p) + '</span> <span class="ref-def">' + esc(pm.patterns[p]) + '</span>';
+          pmContainer.appendChild(div);
+        });
+
+        if (pm.examples && pm.examples.length) {
+          var eHeading = document.createElement("div");
+          eHeading.className = "ref-category-title";
+          eHeading.textContent = "Examples";
+          pmContainer.appendChild(eHeading);
+          pm.examples.forEach(function (ex) {
+            var div = document.createElement("div");
+            div.className = "ref-item";
+            div.innerHTML = '<span class="ref-def">' + esc(ex) + '</span>';
+            pmContainer.appendChild(div);
+          });
+        }
+
+        var restrict = document.createElement("div");
+        restrict.className = "ref-item";
+        restrict.innerHTML = '<span class="ref-term">Note</span> <span class="ref-def">' + esc(pm.restrictions) + '</span>';
+        pmContainer.appendChild(restrict);
+      }
     });
 
   /* ═══════════════════════════════════════════
