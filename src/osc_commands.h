@@ -471,7 +471,11 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
             }
             osc_reply(reply_ip, reply_port, reply_adr + "/list/scenes", result);
         } else if (sub == "/all" || sub == "") {
-            String result = "Scenes (" + String(reg.scene_count) + "):";
+            String result = "";
+            if (verbose) {
+                result += "dedup:" + String(get_dedup_enabled() ? "on" : "off") + "\n";
+            }
+            result += "Scenes (" + String(reg.scene_count) + "):";
             if (reg.scene_count == 0) {
                 result += " none\n";
             } else {
