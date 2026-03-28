@@ -28,6 +28,7 @@
 #define OSC_REGISTRY_H
 
 #include "osc_scene.h"
+#include "osc_pattern.h"
 #include "ori_tracker.h"
 
 class OscRegistry {
@@ -67,6 +68,26 @@ public:
                 return &messages[i];
         }
         return nullptr;
+    }
+
+    // --- Pattern-matching lookup (OSC 1.0 wildcards) -------------------------
+
+    uint16_t find_msgs_matching(const char* pattern, OscMessage** out, uint16_t max_out) {
+        uint16_t count = 0;
+        for (uint16_t i = 0; i < msg_count && count < max_out; i++) {
+            if (osc_pattern_match(pattern, messages[i].name.c_str()))
+                out[count++] = &messages[i];
+        }
+        return count;
+    }
+
+    uint16_t find_scenes_matching(const char* pattern, OscScene** out, uint16_t max_out) {
+        uint16_t count = 0;
+        for (uint16_t i = 0; i < scene_count && count < max_out; i++) {
+            if (osc_pattern_match(pattern, scenes[i].name.c_str()))
+                out[count++] = &scenes[i];
+        }
+        return count;
     }
 
     // --- Index helpers (pointers ↔ indices) ----------------------------------

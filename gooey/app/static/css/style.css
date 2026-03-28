@@ -2569,3 +2569,46 @@ html.dark .script-editor {
 html.dark .script-ref-content code {
   background: var(--bg-hover);
 }
+
+/* ── Bulk action row (pattern matching) ─── */
+.bulk-action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-alt);
+  font-size: 0.82rem;
+}
+.bulk-label {
+  font-weight: 500;
+  color: var(--text-medium);
+  white-space: nowrap;
+  cursor: help;
+}
+.bulk-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: 'Martian Mono', monospace;
+  font-size: 0.8rem;
+  background: var(--bg-input);
+  color: var(--text-dark);
+}
+.bulk-input:focus { border-color: var(--border-focus); outline: none; }
+.bulk-input.has-pattern { border-color: var(--accent); background: var(--accent-dim); }
+.bulk-select {
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  background: var(--bg-input);
+  color: var(--text-dark);
+}
+.bulk-hint {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  white-space: nowrap;
+}

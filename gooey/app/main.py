@@ -620,19 +620,19 @@ THEATER_GWD_PRESETS = {
         },
         "delete_msg": {
             "address": "/annieData/{device}/msg/{name}/delete",
-            "description": "Remove a message from the registry.",
+            "description": "Remove a message from the registry. Supports OSC patterns in {name}.",
             "payload": None,
             "category": "message",
         },
         "enable_msg": {
             "address": "/annieData/{device}/msg/{name}/enable",
-            "description": "Enable a message so it sends.",
+            "description": "Enable a message so it sends. Supports OSC patterns in {name} (e.g. accel*).",
             "payload": None,
             "category": "message",
         },
         "disable_msg": {
             "address": "/annieData/{device}/msg/{name}/disable",
-            "description": "Mute a message — stays registered but does not send.",
+            "description": "Mute a message — stays registered but does not send. Supports OSC patterns in {name}.",
             "payload": None,
             "category": "message",
         },
@@ -668,19 +668,19 @@ THEATER_GWD_PRESETS = {
         },
         "start_scene": {
             "address": "/annieData/{device}/scene/{name}/start",
-            "description": "Start streaming all messages in a scene.",
+            "description": "Start streaming all messages in a scene. Supports OSC patterns in {name}.",
             "payload": None,
             "category": "scene",
         },
         "stop_scene": {
             "address": "/annieData/{device}/scene/{name}/stop",
-            "description": "Stop streaming all messages in a scene.",
+            "description": "Stop streaming all messages in a scene. Supports OSC patterns in {name}.",
             "payload": None,
             "category": "scene",
         },
         "delete_scene": {
             "address": "/annieData/{device}/scene/{name}/delete",
-            "description": "Remove a scene and its task.",
+            "description": "Remove a scene and its task. Supports OSC patterns in {name}.",
             "payload": None,
             "category": "scene",
         },
@@ -852,6 +852,26 @@ THEATER_GWD_PRESETS = {
         "quatJ": "Quaternion J component — orientation in quaternion form.",
         "quatK": "Quaternion K component — orientation in quaternion form.",
         "quatR": "Quaternion R (scalar/real) component — orientation in quaternion form.",
+    },
+    "pattern_matching": {
+        "description": "OSC 1.0 pattern matching lets you target multiple messages or scenes with a single command.",
+        "supported_in": "The {name} segment of /msg/{name}/{command} and /scene/{name}/{command} addresses.",
+        "patterns": {
+            "*": "Match zero or more characters. Example: accel* matches accelX, accelY, accelZ.",
+            "?": "Match exactly one character. Example: accel? matches accelX but not accelXY.",
+            "[abc]": "Match any single character in the set. Example: accel[XY] matches accelX, accelY.",
+            "[a-z]": "Match any character in the range. Example: [a-c]hat matches ahat, bhat, chat.",
+            "[!abc]": "Match any character NOT in the set. Example: accel[!Z] matches accelX, accelY.",
+            "{foo,bar}": "Match any of the alternatives. Example: {accelX,gyroY} matches accelX or gyroY.",
+        },
+        "restrictions": "Patterns cannot be used with assign/create — you cannot create an entity named '*'.",
+        "examples": [
+            "/msg/*/enable — enable all messages",
+            "/msg/accel*/info — get info for all accel messages",
+            "/scene/*/start — start all scenes",
+            "/scene/{mix,fx}/stop — stop scenes named 'mix' or 'fx'",
+            "/msg/[!g]*/delete — delete all messages not starting with 'g'",
+        ],
     },
 }
 

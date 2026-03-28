@@ -1023,6 +1023,121 @@
     });
   }
 
+  /* ═══════════════════════════════════════════
+     BULK ACTIONS — OSC pattern matching
+     ═══════════════════════════════════════════ */
+
+  /** Returns true if s contains OSC pattern metacharacters. */
+  function hasPattern(s) { return /[*?\[{]/.test(s); }
+
+  /** Highlight the input when it contains a pattern. */
+  function updatePatternHint(inputEl, hintEl, registry) {
+    var val = inputEl.value.trim();
+    if (hasPattern(val)) {
+      inputEl.classList.add("has-pattern");
+      if (registry) {
+        var names = Object.keys(registry);
+        var count = names.filter(function (n) {
+          return oscPatternMatch(val, n);
+        }).length;
+        hintEl.textContent = count + " match" + (count !== 1 ? "es" : "");
+      }
+    } else {
+      inputEl.classList.remove("has-pattern");
+      hintEl.textContent = "";
+    }
+  }
+
+  /**
+   * Simple client-side OSC pattern matcher for preview hints.
+   * Supports * ? [charset] {alt1,alt2}. Case-insensitive.
+   */
+  function oscPatternMatch(pattern, text) {
+    // Convert OSC pattern to a JS regex.
+    var re = "^";
+    var i = 0;
+    var p = pattern.toLowerCase();
+    while (i < p.length) {
+      var c = p[i];
+      if (c === "*") { re += ".*"; i++; }
+      else if (c === "?") { re += "."; i++; }
+      else if (c === "[") {
+        var j = p.indexOf("]", i);
+        if (j < 0) { re += "\\["; i++; continue; }
+        var inner = p.substring(i + 1, j);
+        if (inner[0] === "!") inner = "^" + inner.substring(1);
+        re += "[" + inner + "]";
+        i = j + 1;
+      }
+      else if (c === "{") {
+        var j2 = p.indexOf("}", i);
+        if (j2 < 0) { re += "\\{"; i++; continue; }
+        var alts = p.substring(i + 1, j2).split(",").map(function (a) {
+          return a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        });
+        re += "(?:" + alts.join("|") + ")";
+        i = j2 + 1;
+      }
+      else {
+        re += c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        i++;
+      }
+    }
+    re += "$";
+    try { return new RegExp(re, "i").test(text); }
+    catch (e) { return false; }
+  }
+
+  /* ── Message bulk action ── */
+  (function () {
+    var inp  = $("#msgBulkPattern");
+    var sel  = $("#msgBulkAction");
+    var btn  = $("#btnMsgBulk");
+    var hint = $("#msgBulkHint");
+    if (!inp || !btn) return;
+
+    inp.addEventListener("input", function () {
+      var dev = getActiveDev();
+      updatePatternHint(inp, hint, dev ? dev.messages : null);
+    });
+
+    btn.addEventListener("click", function () {
+      var pattern = inp.value.trim();
+      if (!pattern) { toast("Enter a pattern", "warn"); return; }
+      var act = sel.value;
+      if (act === "delete" && !confirm("Delete all messages matching '" + pattern + "'?")) return;
+      var template = "/annieData/{device}/msg/{name}/" + act;
+      sendCmd(addr(template, pattern), null).then(function (res) {
+        if (res.status === "ok") toast("Bulk " + act + ": " + pattern, "success");
+      });
+    });
+  }());
+
+  /* ── Scene bulk action ── */
+  (function () {
+    var inp  = $("#sceneBulkPattern");
+    var sel  = $("#sceneBulkAction");
+    var btn  = $("#btnSceneBulk");
+    var hint = $("#sceneBulkHint");
+    if (!inp || !btn) return;
+
+    inp.addEventListener("input", function () {
+      var dev = getActiveDev();
+      updatePatternHint(inp, hint, dev ? dev.scenes : null);
+    });
+
+    btn.addEventListener("click", function () {
+      var pattern = inp.value.trim();
+      if (!pattern) { toast("Enter a pattern", "warn"); return; }
+      var act = sel.value;
+      if (act === "delete" && !confirm("Delete all scenes matching '" + pattern + "'?")) return;
+      var template = "/annieData/{device}/scene/{name}/" + act;
+      sendCmd(addr(template, pattern), null).then(function (res) {
+        if (res.status === "ok") toast("Bulk " + act + ": " + pattern, "success");
+      });
+    });
+  }());
+
   /* ── Ori explainer dismiss ── */
   (function () {
     var card = $("#oriExplainerCard");
