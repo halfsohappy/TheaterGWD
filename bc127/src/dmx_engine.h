@@ -14,7 +14,7 @@
 static uint8_t  dmx_values[DMX_PACKET_SIZE];   // intended channel values
 static uint8_t  dmx_blank[DMX_PACKET_SIZE];    // all-zero frame for blackout
 static bool     dmx_blackout = false;           // blackout flag
-static const dmx_port_t DMX_PORT = 1;          // UART1
+static const dmx_port_t DMX_PORT = DMX_NUM_1;   // UART1
 
 // ==== Init ==================================================================
 

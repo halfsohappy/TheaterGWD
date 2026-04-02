@@ -184,12 +184,6 @@ void setup() {
     xTaskCreatePinnedToCore(dmx_send_task, "dmx_tx", 4096, nullptr, 2, nullptr, 1);
     Serial.println(F("[BOOT] DMX send task started (core 1, 40 fps)."));
 
-    // --- Register OSC handler -----------------------------------------------
-    if (network_ready) {
-        osc.onOscMessageReceived(osc_handle_dmx);
-        Serial.println(F("[BOOT] OSC handler registered."));
-    }
-
     // --- Display ------------------------------------------------------------
     display_init();
 

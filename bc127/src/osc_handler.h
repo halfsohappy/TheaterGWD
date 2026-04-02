@@ -167,10 +167,11 @@ static void osc_handle_dmx(MicroOscMessage& msg) {
     if (rest.length() == 0) return;
 
     // Split rest by '/'
-    String segments[4];
+    static constexpr int MAX_OSC_SEGMENTS = 4;
+    String segments[MAX_OSC_SEGMENTS];
     int seg_count = 0;
     int start = 0;
-    for (unsigned int i = 0; i <= rest.length() && seg_count < 4; i++) {
+    for (unsigned int i = 0; i <= rest.length() && seg_count < MAX_OSC_SEGMENTS; i++) {
         if (i == rest.length() || rest.charAt(i) == '/') {
             if ((int)i > start) {
                 segments[seg_count++] = rest.substring(start, i);

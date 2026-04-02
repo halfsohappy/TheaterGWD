@@ -91,9 +91,10 @@ static void draw_osc_feed() {
     for (int i = 0; i < max_lines; i++) {
         const String& line = osc_log_at(first + i);
         M5.Display.setCursor(4, y + i * line_h);
-        // Truncate long lines
-        if (line.length() > 50) {
-            M5.Display.print(line.substring(0, 50));
+        // Truncate lines that exceed display width
+        static constexpr int MAX_DISPLAY_LINE_LEN = 50;
+        if ((int)line.length() > MAX_DISPLAY_LINE_LEN) {
+            M5.Display.print(line.substring(0, MAX_DISPLAY_LINE_LEN));
         } else {
             M5.Display.print(line);
         }
