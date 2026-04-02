@@ -2,15 +2,20 @@
 #define BC127_CONFIG_H
 
 // =============================================================================
-// config.h — Pin definitions and constants for M5Stack CoreS3 + DMX512 Stack
+// config.h — Pin definitions and constants for M5Stack CoreS3 + DMX Base
+// =============================================================================
+//
+// Pin mapping from the M5Stack DMX Base (M-BUS) for CoreS3:
+//   https://docs.m5stack.com/en/base/DMX_Base
+//
 // =============================================================================
 
 #include <Arduino.h>
 
-// ==== DMX512 Stack Pin Mapping (CoreS3) =====================================
-#define DMX_TX_PIN   7
-#define DMX_RX_PIN   10
-#define DMX_EN_PIN   6
+// ==== DMX Base Pin Mapping (CoreS3 M-BUS) ===================================
+#define DMX_TX_PIN   7    // M-BUS pin 22 → CoreS3 GPIO7
+#define DMX_RX_PIN   10   // M-BUS pin 4  → CoreS3 GPIO10
+#define DMX_EN_PIN   6    // M-BUS pin 21 → CoreS3 GPIO6 (RS485 direction)
 
 // ==== DMX Constants =========================================================
 #define DMX_UNIVERSE_SIZE  512

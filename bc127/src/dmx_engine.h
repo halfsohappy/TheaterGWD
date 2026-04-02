@@ -12,17 +12,20 @@
 // ==== DMX Universe State ====================================================
 
 static uint8_t  dmx_values[DMX_PACKET_SIZE];   // intended channel values
+static uint8_t  dmx_blank[DMX_PACKET_SIZE];    // all-zero frame for blackout
 static bool     dmx_blackout = false;           // blackout flag
-static const dmx_port_t DMX_PORT = DMX_NUM_1;
+static const dmx_port_t DMX_PORT = 1;          // UART1
 
 // ==== Init ==================================================================
 
 inline void dmx_init() {
     memset(dmx_values, 0, DMX_PACKET_SIZE);
-    dmx_values[0] = 0;  // DMX start code
+    memset(dmx_blank,  0, DMX_PACKET_SIZE);
 
     dmx_config_t config = DMX_CONFIG_DEFAULT;
-    dmx_driver_install(DMX_PORT, &config, DMX_INTR_FLAGS_DEFAULT);
+    dmx_personality_t personalities[] = {};
+    int personality_count = 0;
+    dmx_driver_install(DMX_PORT, &config, personalities, personality_count);
     dmx_set_pin(DMX_PORT, DMX_TX_PIN, DMX_RX_PIN, DMX_EN_PIN);
 }
 
@@ -55,17 +58,13 @@ inline bool dmx_is_blackout() {
 // ==== Transmit ==============================================================
 // Call this periodically (e.g. every ~25 ms for 40 fps DMX refresh).
 
-inline void dmx_send() {
+inline void dmx_transmit() {
     if (dmx_blackout) {
-        // Send all zeros (but keep dmx_values intact)
-        uint8_t blank[DMX_PACKET_SIZE];
-        memset(blank, 0, DMX_PACKET_SIZE);
-        dmx_write(DMX_PORT, blank, DMX_PACKET_SIZE);
+        dmx_write(DMX_PORT, dmx_blank, DMX_PACKET_SIZE);
     } else {
         dmx_write(DMX_PORT, dmx_values, DMX_PACKET_SIZE);
     }
-    dmx_send_num(DMX_PORT, DMX_PACKET_SIZE);
-    dmx_wait_sent(DMX_PORT, DMX_TIMEOUT_TICK);
+    dmx_send(DMX_PORT, DMX_PACKET_SIZE);
 }
 
 #endif // BC127_DMX_ENGINE_H
