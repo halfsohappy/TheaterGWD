@@ -68,7 +68,7 @@ inline void dmx_transmit() {
         dmx_write(DMX_PORT, dmx_values, DMX_PACKET_SIZE);
     }
     dmx_send_num(DMX_PORT, DMX_PACKET_SIZE);
-    dmx_wait_sent(DMX_PORT, pdMS_TO_TICKS(1000));
+    dmx_wait_sent(DMX_PORT, pdMS_TO_TICKS(100));
 }
 
 #endif // BC127_DMX_ENGINE_H
