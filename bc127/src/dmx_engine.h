@@ -57,6 +57,9 @@ inline bool dmx_is_blackout() {
 
 // ==== Transmit ==============================================================
 // Call this periodically (e.g. every ~25 ms for 40 fps DMX refresh).
+// Uses dmx_send_num (esp_dmx v4.1) which blocks until the driver is idle,
+// then dmx_wait_sent to ensure the frame is fully on the wire before the
+// buffer is touched again on the next iteration.
 
 inline void dmx_transmit() {
     if (dmx_blackout) {
@@ -64,7 +67,8 @@ inline void dmx_transmit() {
     } else {
         dmx_write(DMX_PORT, dmx_values, DMX_PACKET_SIZE);
     }
-    dmx_send(DMX_PORT, DMX_PACKET_SIZE);
+    dmx_send_num(DMX_PORT, DMX_PACKET_SIZE);
+    dmx_wait_sent(DMX_PORT, pdMS_TO_TICKS(1000));
 }
 
 #endif // BC127_DMX_ENGINE_H

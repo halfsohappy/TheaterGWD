@@ -13,9 +13,11 @@
 #include <Arduino.h>
 
 // ==== DMX Base Pin Mapping (CoreS3 M-BUS) ===================================
-#define DMX_TX_PIN   7    // M-BUS pin 22 → CoreS3 GPIO7
-#define DMX_RX_PIN   10   // M-BUS pin 4  → CoreS3 GPIO10
-#define DMX_EN_PIN   6    // M-BUS pin 21 → CoreS3 GPIO6 (RS485 direction)
+// Pin map verified against M5Stack DMX Base schematic + CoreS3 M-BUS layout.
+// The DMX Base wires TXD/RXD/DE to M-BUS positions that on CoreS3 route to:
+#define DMX_TX_PIN   17   // UART TX → RS-485 DI  (CoreS3 GPIO17)
+#define DMX_RX_PIN   18   // UART RX → RS-485 RO  (CoreS3 GPIO18)
+#define DMX_EN_PIN   10   // RS-485 DE/RE          (CoreS3 GPIO10)
 
 // ==== DMX Constants =========================================================
 #define DMX_UNIVERSE_SIZE  512
