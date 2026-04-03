@@ -31,4 +31,14 @@ mkdir -p "$TARGET_DIR"
 cp "$SRC" "$DEST"
 chmod +x "$DEST"
 
+# On macOS, re-sign the sidecar with the app's network entitlements and
+# Hardened Runtime. 'tauri build' signs the whole app bundle but may not
+# apply entitlements to non-main binaries. Without com.apple.security.network.client
+# under Hardened Runtime, outbound UDP (OSC) to LAN addresses fails with EHOSTUNREACH.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    ENTITLEMENTS="$GOOEY_DIR/src-tauri/entitlements.plist"
+    echo "Signing sidecar with network entitlements..."
+    codesign --force --sign - --entitlements "$ENTITLEMENTS" --options runtime "$DEST"
+fi
+
 echo "Sidecar placed at: $DEST"
