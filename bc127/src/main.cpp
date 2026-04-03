@@ -47,9 +47,12 @@ static int  osc_port = 8000;
 static void begin_udp(const String& ip_str, const String& ssid,
                        const String& password, int port) {
     if (ip_str != "dhcp") {
-        IPAddress static_ip;
+        IPAddress static_ip, gateway, subnet;
         static_ip.fromString(ip_str);
-        WiFi.config(static_ip);
+        // Derive a sensible default gateway (x.x.x.1) and /24 subnet
+        gateway = IPAddress(static_ip[0], static_ip[1], static_ip[2], 1);
+        subnet  = IPAddress(255, 255, 255, 0);
+        WiFi.config(static_ip, gateway, subnet);
     }
 
     WiFi.begin(ssid.c_str(), password.c_str());
