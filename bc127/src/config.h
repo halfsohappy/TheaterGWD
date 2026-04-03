@@ -21,7 +21,7 @@
 
 // ==== DMX Constants =========================================================
 #define DMX_UNIVERSE_SIZE  512
-#define DMX_PACKET_SIZE    513    // start code (0) + 512 channels
+#define MDMX_PACKET_SIZE   513    // start code (0) + 512 channels
 
 // ==== Display Constants =====================================================
 #define DISPLAY_WIDTH   320
