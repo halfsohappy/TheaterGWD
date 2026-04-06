@@ -6,9 +6,11 @@
 //   - Adafruit Seesaw ANO Rotary Navigation Encoder (I2C, 0x49)
 //
 // Each press of the ANO centre button:
-//   1. Increments a counter that cycles 0 → 1 → … → 14 → 0
+//   1. Increments a counter that cycles 1 → 2 → … → 16 → 1
 //   2. Updates the OLED display with the current count
-//   3. Sends an OSC message over WiFi (see config.h for address and options)
+//   3. Sends two OSC messages over WiFi:
+//        Target A — fixed payload (OSC_A_ADDRESS, OSC_A_PAYLOAD)
+//        Target B — counter payload (OSC_B_ADDRESS, float count)
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -23,13 +25,13 @@
 
 // ── Globals ──────────────────────────────────────────────────────────────────
 
-static Adafruit_SSD1306         display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-static Adafruit_seesaw          seesaw;
-static WiFiUDP                  udp;
+static Adafruit_SSD1306          display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+static Adafruit_seesaw           seesaw;
+static WiFiUDP                   udp;
 static MicroOscUdp<OSC_BUF_SIZE> osc(&udp);
 
-static int           press_count = 0;
-static bool          btn_last    = true;    // true = released (pull-up, active-low)
+static int           press_count = 1;      // starts at 1; cycles 1–PRESS_MAX
+static bool          btn_last    = true;   // true = released (pull-up, active-low)
 static unsigned long btn_time    = 0;
 
 // ── Display ──────────────────────────────────────────────────────────────────
@@ -91,7 +93,6 @@ static void wifi_connect() {
 
     Serial.printf("[WiFi] Connected: %s\n", WiFi.localIP().toString().c_str());
     udp.begin(9000);
-    osc.setDestination(OSC_TARGET_IP, OSC_TARGET_PORT);
 }
 
 // ── OSC ──────────────────────────────────────────────────────────────────────
@@ -102,13 +103,17 @@ static void send_osc(int count) {
         return;
     }
 
-#if OSC_INCLUDE_COUNT
-    osc.sendFloat(OSC_ADDRESS, (float)count);
-    Serial.printf("[OSC] %s %.0f\n", OSC_ADDRESS, (float)count);
-#else
-    osc.sendFloat(OSC_ADDRESS, 1.0f);
-    Serial.printf("[OSC] %s\n", OSC_ADDRESS);
-#endif
+    // Target A — fixed message, same payload on every press
+    osc.setDestination(OSC_A_IP, OSC_A_PORT);
+    osc.sendFloat(OSC_A_ADDRESS, OSC_A_PAYLOAD);
+    Serial.printf("[OSC-A] %s %.1f -> %s:%d\n",
+                  OSC_A_ADDRESS, (float)OSC_A_PAYLOAD, OSC_A_IP, OSC_A_PORT);
+
+    // Target B — counter message, payload = current count
+    osc.setDestination(OSC_B_IP, OSC_B_PORT);
+    osc.sendFloat(OSC_B_ADDRESS, (float)count);
+    Serial.printf("[OSC-B] %s %.0f -> %s:%d\n",
+                  OSC_B_ADDRESS, (float)count, OSC_B_IP, OSC_B_PORT);
 }
 
 // ── Setup ────────────────────────────────────────────────────────────────────
@@ -142,7 +147,7 @@ void setup() {
 
     // Show initial count
     display_count(press_count);
-    Serial.println("[symon] Ready");
+    Serial.println("[symon] Ready — counter 1-16, two OSC targets");
 }
 
 // ── Loop ─────────────────────────────────────────────────────────────────────
@@ -153,7 +158,8 @@ void loop() {
     // Falling edge = button just pressed (active-low with internal pull-up)
     if (!btn_now && btn_last && (millis() - btn_time > DEBOUNCE_MS)) {
         btn_time    = millis();
-        press_count = (press_count + 1) % (PRESS_MAX + 1);
+        // Cycle 1 → 2 → … → PRESS_MAX → 1
+        press_count = (press_count % PRESS_MAX) + 1;
 
         Serial.printf("[button] count = %d\n", press_count);
         display_count(press_count);

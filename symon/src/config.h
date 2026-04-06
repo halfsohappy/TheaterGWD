@@ -22,8 +22,8 @@
 #define SS_NEOPIX_NUM  8        // 8-pixel ring
 
 // ── Button counter ───────────────────────────────────────────────────────────
-// Press count cycles 0 → 1 → 2 → … → PRESS_MAX → 0 → …
-#define PRESS_MAX     14
+// Press count cycles 1 → 2 → … → PRESS_MAX → 1 → …
+#define PRESS_MAX     16
 #define DEBOUNCE_MS   200
 
 // ── WiFi ─────────────────────────────────────────────────────────────────────
@@ -31,19 +31,17 @@
 #define WIFI_PASSWORD    "your_password"
 #define WIFI_TIMEOUT_MS  10000
 
-// ── OSC target ───────────────────────────────────────────────────────────────
-#define OSC_TARGET_IP    "192.168.1.100"  // IP of the receiving host
-#define OSC_TARGET_PORT  8000             // UDP port of the receiving host
-#define OSC_ADDRESS      "/symon/button"  // OSC address to send
+// ── OSC target A — fixed message (same payload every press) ──────────────────
+#define OSC_A_IP       "192.168.1.100"   // IP of target A
+#define OSC_A_PORT     8000              // UDP port of target A
+#define OSC_A_ADDRESS  "/symon/button"   // OSC address for target A
+// Payload sent to A on every press (edit as needed):
+#define OSC_A_PAYLOAD  1.0f
 
-// ── OSC count option ─────────────────────────────────────────────────────────
-// Set to 1 to include the current press count as a float argument in each
-// OSC message.  Set to 0 to send the address with no argument (bare trigger).
-//
-// You can also embed the count in the address itself by building a dynamic
-// address string in send_osc() in main.cpp, e.g.:
-//   snprintf(addr, sizeof(addr), "/symon/button/%d", count);
-#define OSC_INCLUDE_COUNT  1
+// ── OSC target B — counter message (payload = current count 1–16) ────────────
+#define OSC_B_IP       "192.168.1.101"   // IP of target B
+#define OSC_B_PORT     8000              // UDP port of target B
+#define OSC_B_ADDRESS  "/symon/count"    // OSC address for target B
 
 // ── OSC buffer ───────────────────────────────────────────────────────────────
 #define OSC_BUF_SIZE  256
