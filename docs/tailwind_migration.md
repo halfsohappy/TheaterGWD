@@ -9,10 +9,10 @@
 
 | Asset | Lines | Size | Notes |
 |---|---|---|---|
-| `style.css` | 3 305 | 88 KB | Single monolithic stylesheet, light + dark themes |
-| `index.html` | 1 380 | 77 KB | Main Jinja2 template, 525 `class=` usages |
+| `style.css` | 3,305 | 88 KB | Single monolithic stylesheet, light + dark themes |
+| `index.html` | 1,380 | 77 KB | Main Jinja2 template, 525 `class=` usages |
 | `remote.html` | 390 | 23 KB | Mobile remote PWA template, 129 `class=` usages |
-| `app.js` | 5 049 | 203 KB | Vanilla IIFE, 191 className assignments, 74 classList ops, 50 createElement calls |
+| `app.js` | 5,049 | 203 KB | Vanilla IIFE, 191 className assignments, 74 classList ops, 50 createElement calls |
 | `remote.js` | 565 | 28 KB | Module pattern, mobile remote |
 
 ### Current CSS architecture at a glance
@@ -76,9 +76,9 @@ component they affect, which is easier to reason about and maintain.
 
 ### 2.4  Consistent spacing & sizing scale
 
-The current CSS hardcodes pixel values (8 px, 12 px, 16 px, 20 px, etc.)
-with no enforced scale. Tailwind provides a default 4 px increment
-scale (`p-1` = 4 px, `p-2` = 8 px, `p-3` = 12 px …) that keeps spacing
+The current CSS hardcodes pixel values (8px, 12px, 16px, 20px, etc.)
+with no enforced scale. Tailwind provides a default 4px increment
+scale (`p-1` = 4px, `p-2` = 8px, `p-3` = 12px …) that keeps spacing
 systematic and prevents "off-by-two" drift over time.
 
 ### 2.5  Component extraction via `@apply`
@@ -173,7 +173,7 @@ With Tailwind, the equivalent becomes:
 ```
 
 This is **harder to scan** and bloats template line lengths — a real
-concern in `index.html` which is already 1 380 lines.
+concern in `index.html` which is already 1,380 lines.
 
 ### 3.3  JS-side class management becomes harder
 
@@ -243,7 +243,7 @@ immune to upstream churn.
 | **State variants** | Hand-rolled `:hover`, `:focus`, `:active` | `hover:`, `focus:`, `active:`, `group-hover:`, `peer-checked:` etc. |
 | **Accessibility utilities** | 6 `:focus` rules, no sr-only | `focus-visible:`, `sr-only`, `not-sr-only`, `forced-colors:` |
 | **Container queries** | Not used | `@container` plugin for card-level responsive |
-| **Consistent spacing** | Ad-hoc pixel values | Systematic 4 px scale |
+| **Consistent spacing** | Ad-hoc pixel values | Systematic 4px scale |
 | **Animation utilities** | 5 custom `@keyframes` | `animate-pulse`, `animate-spin`, `animate-bounce` + `tailwindcss-animate` |
 | **Typography plugin** | Manual `docs.html` styling | `@tailwindcss/typography` prose classes for markdown docs |
 | **Form normalization** | Custom input/select/checkbox resets | `@tailwindcss/forms` |
@@ -448,7 +448,7 @@ here to avoid a massive JS refactor.
 4. If the PoC is positive, commit to the phased migration.
    If not, the toolchain addition is trivially revertible.
 
-The project is at a size (~3 300 lines of CSS, ~400 classes) where
+The project is at a size (~3,300 lines of CSS, ~400 classes) where
 migration is **feasible but non-trivial**. Waiting longer will only make
 it harder as the stylesheet grows. If the team values design consistency,
 dark-mode reliability, and faster UI iteration, Tailwind is worth the
