@@ -27,8 +27,8 @@ def main():
         help="Path to the gooey/ directory (auto-detected if omitted)"
     )
     parser.add_argument(
-        "--no-debug", action="store_true",
-        help="Disable Flask debug mode"
+        "--debug", action="store_true",
+        help="Enable Flask debug mode (disabled by default)"
     )
     args = parser.parse_args()
 
@@ -60,7 +60,7 @@ def main():
         sys.exit(1)
 
     from .server import run
-    run(gooey_dir, port=args.port, debug=not args.no_debug)
+    run(gooey_dir, port=args.port, debug=args.debug)
 
 
 if __name__ == "__main__":

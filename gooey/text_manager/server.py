@@ -13,6 +13,30 @@ from flask import Flask, jsonify, render_template, request
 
 from .extractor import apply_edits, scan_all
 
+# Allowlisted relative paths that the tool is permitted to read/write.
+# Only files within these directories (under gooey/) are accessible.
+_SAFE_PREFIXES = ("app/templates/", "app/static/js/", "app/static/css/")
+
+
+def _safe_resolve(gooey_dir: str, rel_path: str):
+    """Resolve *rel_path* to an absolute path, rejecting traversal attacks.
+
+    Returns the resolved absolute path, or ``None`` if the path escapes
+    the gooey directory or is not under an allowlisted prefix.
+    """
+    # Normalise and reject obvious traversal
+    normed = os.path.normpath(rel_path)
+    if normed.startswith("..") or os.path.isabs(normed):
+        return None
+    abs_path = os.path.realpath(os.path.join(gooey_dir, normed))
+    real_gooey = os.path.realpath(gooey_dir)
+    if not abs_path.startswith(real_gooey + os.sep):
+        return None
+    # Must be under one of the safe prefixes
+    if not any(normed.startswith(p) for p in _SAFE_PREFIXES):
+        return None
+    return abs_path
+
 _gooey_dir: str = ""
 _entries_cache: list = []
 
@@ -71,8 +95,8 @@ def create_app(gooey_dir: str) -> Flask:
     @app.route("/api/file/<path:filepath>")
     def api_file(filepath):
         """Return the raw content of a source file (for preview)."""
-        abs_path = os.path.join(_gooey_dir, filepath)
-        if not os.path.isfile(abs_path):
+        abs_path = _safe_resolve(_gooey_dir, filepath)
+        if abs_path is None or not os.path.isfile(abs_path):
             return jsonify({"status": "error", "message": "File not found"}), 404
         with open(abs_path, encoding="utf-8") as f:
             content = f.read()
@@ -87,8 +111,8 @@ def create_app(gooey_dir: str) -> Flask:
         text = data.get("text", "")
         replacement = data.get("replacement", text)
 
-        abs_path = os.path.join(_gooey_dir, file_path)
-        if not os.path.isfile(abs_path):
+        abs_path = _safe_resolve(_gooey_dir, file_path)
+        if abs_path is None or not os.path.isfile(abs_path):
             return jsonify({"status": "error", "html": "<em>File not found</em>"})
 
         with open(abs_path, encoding="utf-8") as f:
@@ -128,7 +152,7 @@ def create_app(gooey_dir: str) -> Flask:
     return app
 
 
-def run(gooey_dir: str, port: int = 5001, debug: bool = True):
+def run(gooey_dir: str, port: int = 5001, debug: bool = False):
     """Start the Text Manager web server."""
     app = create_app(gooey_dir)
 

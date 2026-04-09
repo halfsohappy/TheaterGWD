@@ -15,6 +15,23 @@ from typing import List, Optional
 
 
 # ---------------------------------------------------------------------------
+#  Configuration constants
+# ---------------------------------------------------------------------------
+
+# Strings shorter than this are ignored (skips punctuation, single chars, etc.)
+MIN_TEXT_LEN = 2
+
+# How many lines to walk backwards when detecting which app section a line
+# belongs to (Messages, Scenes, Ori, etc.).
+SECTION_LOOKBACK_LINES = 200
+
+# When the exact line reported by the parser doesn't contain the expected text,
+# try these offsets (in order) before giving up.  Parser positions can be off
+# by a line or two for multiline elements.
+ADJACENT_LINE_OFFSETS = [-1, 1, -2, 2]
+
+
+# ---------------------------------------------------------------------------
 #  Data structures
 # ---------------------------------------------------------------------------
 
@@ -81,7 +98,9 @@ _ATTR_CATEGORIES = {
     "alt":          "Tooltip & Hover Text",
 }
 
-# Section detected from HTML comment markers or IDs
+# Section detected by scanning backwards from the text entry's line until one
+# of these patterns matches.  Each pattern targets the HTML section ID, comment
+# banner, or characteristic element IDs that mark that section.
 _SECTION_MARKERS = [
     (r"sec-messages|MESSAGES|msgTable|msgName|Create.*Edit.*Message",   "Messages"),
     (r"sec-scenes|SCENES|sceneTable|sceneName|Create.*Edit.*Scene",    "Scenes"),
@@ -113,7 +132,7 @@ _CONTENT_KEYWORDS = {
 
 def _detect_section(lines: List[str], line_idx: int) -> str:
     """Walk backwards to find the nearest section marker."""
-    for i in range(line_idx, max(-1, line_idx - 200), -1):
+    for i in range(line_idx, max(-1, line_idx - SECTION_LOOKBACK_LINES), -1):
         if i < 0:
             break
         line = lines[i]
@@ -199,7 +218,7 @@ _VISIBLE_TAGS = {
 _SKIP_TAGS = {"script", "style", "code", "pre", "textarea"}
 
 # Minimum text length to include
-_MIN_TEXT_LEN = 2
+# Minimum text length to include (uses module-level MIN_TEXT_LEN constant)
 
 
 class _HTMLTextParser(HTMLParser):
@@ -229,7 +248,7 @@ class _HTMLTextParser(HTMLParser):
         # Extract text attributes
         for attr_name in _TEXT_ATTRS:
             val = attrs_dict.get(attr_name, "").strip()
-            if val and len(val) >= _MIN_TEXT_LEN:
+            if val and len(val) >= MIN_TEXT_LEN:
                 # Skip Jinja2 template expressions
                 if val.startswith("{{") or val.startswith("{%"):
                     continue
@@ -252,7 +271,7 @@ class _HTMLTextParser(HTMLParser):
         # Extract optgroup label
         if tag == "optgroup" and "label" in attrs_dict:
             label = attrs_dict["label"].strip()
-            if label and len(label) >= _MIN_TEXT_LEN:
+            if label and len(label) >= MIN_TEXT_LEN:
                 line, _ = self.getpos()
                 line_content = self.raw_lines[line - 1] if line <= len(self.raw_lines) else ""
                 col = line_content.find(label)
@@ -281,7 +300,7 @@ class _HTMLTextParser(HTMLParser):
             return
 
         text = data.strip()
-        if not text or len(text) < _MIN_TEXT_LEN:
+        if not text or len(text) < MIN_TEXT_LEN:
             return
 
         # Skip Jinja2 expressions
@@ -349,7 +368,7 @@ def extract_html(filepath: str, base_dir: str) -> List[TextEntry]:
     for e in parser.entries:
         # Skip very short or purely numeric/symbolic text
         cleaned = e.text.strip()
-        if len(cleaned) < _MIN_TEXT_LEN:
+        if len(cleaned) < MIN_TEXT_LEN:
             continue
         if re.match(r"^[\d.,:;!?@#$%^&*()\-+=<>/\\|~`\[\]{}]+$", cleaned):
             continue
@@ -381,7 +400,7 @@ def _extract_js_strings(filepath: str, base_dir: str) -> List[TextEntry]:
 
     def _add(text: str, line_idx: int, element_info: str):
         text = text.strip()
-        if len(text) < _MIN_TEXT_LEN:
+        if len(text) < MIN_TEXT_LEN:
             return
         # Skip strings that look like selectors, IDs, CSS classes, or code
         if text.startswith("#") or text.startswith(".") or text.startswith("bi-"):
@@ -478,7 +497,7 @@ def _extract_js_strings(filepath: str, base_dir: str) -> List[TextEntry]:
             if m:
                 val = m.group(1)
                 # Skip if it looks like a selector or ID
-                if len(val) >= _MIN_TEXT_LEN and not val.startswith("#"):
+                if len(val) >= MIN_TEXT_LEN and not val.startswith("#"):
                     _add(val, i, f"prop:{prop}")
 
     return entries
@@ -512,7 +531,7 @@ def _extract_js_object_array(
             m = re.search(rf'{prop}\s*:\s*["\']([^"\']+)["\']', line)
             if m:
                 text = m.group(1).strip()
-                if len(text) >= _MIN_TEXT_LEN:
+                if len(text) >= MIN_TEXT_LEN:
                     key = (rel_path, i + 1, text[:50])
                     if key not in seen:
                         seen.add(key)
@@ -623,7 +642,7 @@ def apply_edits(edits: dict, gooey_dir: str) -> dict:
             if original not in line:
                 # Try adjacent lines (parser position can be off by 1)
                 found = False
-                for offset in [-1, 1, -2, 2]:
+                for offset in ADJACENT_LINE_OFFSETS:
                     adj = line_idx + offset
                     if 0 <= adj < len(lines) and original in lines[adj]:
                         lines[adj] = lines[adj].replace(original, replacement, 1)
