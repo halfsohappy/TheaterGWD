@@ -20,8 +20,6 @@ from .extractor import apply_edits, scan_all
 
 _JINJA_VAR_RE = re.compile(r'\{\{[^}]*\}\}')
 _JINJA_BLOCK_RE = re.compile(r'\{%-?[^%]*-?%\}')
-# Use [^>]*> to match closing tags with any attributes/whitespace (e.g. </script >, </script\ttype>).
-_SCRIPT_BLOCK_RE = re.compile(r'<script\b[^>]*?>.*?</script[^>]*>', re.DOTALL | re.IGNORECASE)
 
 # How many lines to walk back from the target when looking for a container.
 _CONTAINER_SEARCH_START = 5
@@ -68,7 +66,7 @@ def _build_html_fragment(all_lines: list, entry, replacement, base_url: str = ''
 
     hi = min(n, lo + _FRAGMENT_MAX_LINES)
 
-    # Process each line: strip Jinja2, then highlight the target line.
+    # Process each line: strip Jinja2, skip script blocks, highlight the target.
     target_text = entry.text
     repl_text = replacement if replacement is not None else target_text
     is_modified = repl_text != target_text
@@ -77,8 +75,21 @@ def _build_html_fragment(all_lines: list, entry, replacement, base_url: str = ''
     esc_r = repl_text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
     fragment_parts = []
+    in_script = False
     for i in range(lo, hi):
         raw = all_lines[i].rstrip('\n')
+        line_lower = raw.lower()
+
+        # Track <script> blocks line by line to avoid ReDoS from a regex on
+        # the full concatenated fragment string.
+        if in_script:
+            if '</script' in line_lower:
+                in_script = False
+            continue
+        if '<script' in line_lower:
+            in_script = True
+            continue
+
         processed = _strip_jinja(raw)
 
         if i == target_idx and target_text:
@@ -102,7 +113,6 @@ def _build_html_fragment(all_lines: list, entry, replacement, base_url: str = ''
         fragment_parts.append(processed)
 
     fragment = '\n'.join(fragment_parts)
-    fragment = _SCRIPT_BLOCK_RE.sub('', fragment)
     return _wrap_srcdoc(fragment, base_url=base_url)
 
 
@@ -167,9 +177,6 @@ def _wrap_srcdoc(fragment: str, base_url: str = '', extra_css: str = '') -> str:
         '.tm-line-hl{background:#fff3b0;outline:1px solid #e8a820;display:block;}'
         + extra_css
         + '</style>'
-        # allow-scripts enables the scroll-to-highlight helper.  allow-same-origin
-        # is intentionally omitted — CSS loads via the <base> absolute URL without
-        # needing same-origin access, and the script only calls scrollIntoView.
         '<script>window.addEventListener("load",function(){'
         'var e=document.querySelector(".tm-hl,.tm-del,.tm-ins,.tm-line-hl");'
         'if(e)e.scrollIntoView({block:"center"});'

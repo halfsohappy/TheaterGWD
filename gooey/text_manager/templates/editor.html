@@ -547,6 +547,8 @@
     );
   }
 
+  var _viewportRefreshTimers = {};   // id → timeout handle
+
   function attachGalleryEvents() {
     // Edit textarea.
     entriesPanel.querySelectorAll(".gc-edit .entry-edit").forEach(function (el) {
@@ -565,9 +567,14 @@
           this.closest(".gallery-card").classList.add("modified");
         }
         updateBadges();
-        // Refresh the iframe to show the updated text.
+        // Debounce the viewport refresh to avoid a server round-trip per keystroke.
+        clearTimeout(_viewportRefreshTimers[id]);
         var viewport = this.closest(".gallery-card").querySelector(".gc-viewport");
-        if (viewport) { refreshViewport(viewport, id); }
+        if (viewport) {
+          _viewportRefreshTimers[id] = setTimeout(function () {
+            refreshViewport(viewport, id);
+          }, 600);
+        }
       });
     });
 
@@ -963,8 +970,9 @@
   });
 
   /* ── Init ── */
-  // Apply gallery mode through applyViewMode to keep state + DOM in sync.
-  applyViewMode("gallery");
+  // Set gallery mode visual state without triggering a render before entries load.
+  app.classList.add("gallery-mode");
+  document.getElementById("btnViewGallery").classList.add("active");
   doScan();
 
 })();
