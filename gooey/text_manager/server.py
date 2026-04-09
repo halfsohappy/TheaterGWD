@@ -20,7 +20,14 @@ from .extractor import apply_edits, scan_all
 
 _JINJA_VAR_RE = re.compile(r'\{\{[^}]*\}\}')
 _JINJA_BLOCK_RE = re.compile(r'\{%-?[^%]*-?%\}')
-_SCRIPT_BLOCK_RE = re.compile(r'<script\b[^>]*?>.*?</script>', re.DOTALL | re.IGNORECASE)
+# Use [^>]*> to match closing tags with any attributes/whitespace (e.g. </script >, </script\ttype>).
+_SCRIPT_BLOCK_RE = re.compile(r'<script\b[^>]*?>.*?</script[^>]*>', re.DOTALL | re.IGNORECASE)
+
+# How many lines to walk back from the target when looking for a container.
+_CONTAINER_SEARCH_START = 5
+_CONTAINER_SEARCH_DEPTH = 50
+# Maximum number of source lines included in one fragment.
+_FRAGMENT_MAX_LINES = 44
 
 # Patterns that indicate a structural container worth using as viewport root.
 _CONTAINER_PAT = re.compile(
@@ -47,19 +54,19 @@ def _strip_jinja(line: str) -> str:
     return line
 
 
-def _build_html_fragment(all_lines: list, entry, replacement) -> str:
+def _build_html_fragment(all_lines: list, entry, replacement, base_url: str = '') -> str:
     """Return a srcdoc-ready HTML document built from the entry's source file."""
     n = len(all_lines)
     target_idx = entry.line - 1  # 0-based
 
     # Walk backward to find the nearest enclosing structural container.
-    lo = max(0, target_idx - 5)
-    for i in range(target_idx, max(-1, target_idx - 50), -1):
+    lo = max(0, target_idx - _CONTAINER_SEARCH_START)
+    for i in range(target_idx, max(-1, target_idx - _CONTAINER_SEARCH_DEPTH), -1):
         if _CONTAINER_PAT.search(all_lines[i]):
             lo = i
             break
 
-    hi = min(n, lo + 44)
+    hi = min(n, lo + _FRAGMENT_MAX_LINES)
 
     # Process each line: strip Jinja2, then highlight the target line.
     target_text = entry.text
@@ -96,10 +103,10 @@ def _build_html_fragment(all_lines: list, entry, replacement) -> str:
 
     fragment = '\n'.join(fragment_parts)
     fragment = _SCRIPT_BLOCK_RE.sub('', fragment)
-    return _wrap_srcdoc(fragment)
+    return _wrap_srcdoc(fragment, base_url=base_url)
 
 
-def _build_js_fragment(entry, replacement) -> str:
+def _build_js_fragment(entry, replacement, base_url: str = '') -> str:
     """Return a srcdoc-ready HTML document simulating a JS-injected element."""
     text = replacement if replacement is not None else entry.text
     el = entry.element_info.lower()
@@ -137,17 +144,19 @@ def _build_js_fragment(entry, replacement) -> str:
 
     return _wrap_srcdoc(
         '<div class="preview-wrap">' + body + '</div>',
+        base_url=base_url,
         extra_css=_JS_PREVIEW_CSS,
     )
 
 
-def _wrap_srcdoc(fragment: str, extra_css: str = '') -> str:
+def _wrap_srcdoc(fragment: str, base_url: str = '', extra_css: str = '') -> str:
     """Wrap an HTML fragment in a full srcdoc document with the app's CSS."""
+    base_tag = f'<base href="{base_url}">' if base_url else ''
     return (
         '<!DOCTYPE html><html><head>'
         '<meta charset="UTF-8">'
-        '<base href="http://127.0.0.1:5001/">'
-        '<link rel="stylesheet" href="/static/css/style.css">'
+        + base_tag
+        + '<link rel="stylesheet" href="/static/css/style.css">'
         '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">'
         '<style>'
         'html,body{margin:0;padding:8px;background:var(--bg,#f6f4fb);}'
@@ -156,8 +165,11 @@ def _wrap_srcdoc(fragment: str, extra_css: str = '') -> str:
         '.tm-ins{background:#dfd;text-decoration:none;border-radius:2px;}'
         '.tm-jinja{color:#bbb;font-style:italic;font-size:11px;}'
         '.tm-line-hl{background:#fff3b0;outline:1px solid #e8a820;display:block;}'
-        + extra_css +
-        '</style>'
+        + extra_css
+        + '</style>'
+        # allow-scripts enables the scroll-to-highlight helper.  allow-same-origin
+        # is intentionally omitted — CSS loads via the <base> absolute URL without
+        # needing same-origin access, and the script only calls scrollIntoView.
         '<script>window.addEventListener("load",function(){'
         'var e=document.querySelector(".tm-hl,.tm-del,.tm-ins,.tm-line-hl");'
         'if(e)e.scrollIntoView({block:"center"});'
@@ -267,8 +279,12 @@ def create_app(gooey_dir: str) -> Flask:
         if not entry:
             return jsonify({"status": "error", "html": ""})
 
+        # Derive the base URL from the current request so the srcdoc's <base>
+        # tag points at the correct host regardless of configured port.
+        base_url = request.host_url  # e.g. "http://127.0.0.1:5001/"
+
         if entry.source_type == "js":
-            html_doc = _build_js_fragment(entry, replacement)
+            html_doc = _build_js_fragment(entry, replacement, base_url=base_url)
             return jsonify({"status": "ok", "html": html_doc})
 
         abs_path = _safe_resolve(_gooey_dir, entry.file)
@@ -278,7 +294,7 @@ def create_app(gooey_dir: str) -> Flask:
         with open(abs_path, encoding="utf-8") as f:
             all_lines = f.readlines()
 
-        html_doc = _build_html_fragment(all_lines, entry, replacement)
+        html_doc = _build_html_fragment(all_lines, entry, replacement, base_url=base_url)
         return jsonify({"status": "ok", "html": html_doc})
 
     @app.route("/api/preview", methods=["POST"])
