@@ -217,9 +217,6 @@ _VISIBLE_TAGS = {
 # Tags to skip entirely
 _SKIP_TAGS = {"script", "style", "code", "pre", "textarea"}
 
-# Minimum text length to include
-# Minimum text length to include (uses module-level MIN_TEXT_LEN constant)
-
 
 class _HTMLTextParser(HTMLParser):
     """Custom HTML parser that extracts user-facing text with positions."""
