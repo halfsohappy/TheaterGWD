@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>annieData Header — Tailwind + shadcn PoC</title>
+
+  <!-- Compiled Tailwind CSS (local) -->
+  <link rel="stylesheet" href="output.css">
+
+  <!-- Bootstrap Icons (same icon set gooey already uses) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+  <!-- Google Fonts — same fonts as current gooey -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;400;500&family=Playwrite+DE+Grund:wght@400;500&family=Playwrite+IE:wght@100..400&display=swap" rel="stylesheet">
+</head>
+
+<body class="bg-background text-foreground font-mono text-sm antialiased min-h-screen">
+
+  <!-- ===== Standalone header replica ===== -->
+  <header class="flex flex-row items-stretch bg-header dark:bg-header-dk shadow-md relative z-20">
+
+    <!-- Left + center: main row stacked above status strip -->
+    <div class="flex-1 flex flex-col min-w-0">
+
+      <!-- ── Main row ── -->
+      <div class="flex items-stretch min-h-[64px]">
+
+        <!-- Device action 2×2 grid + tab area -->
+        <div class="flex-1 flex items-stretch px-1.5 border-r border-white/10 overflow-hidden gap-1.5">
+
+          <!-- 2×2 action buttons -->
+          <div class="grid grid-cols-2 grid-rows-2 gap-1 self-stretch flex-shrink-0 py-1.5">
+            <button class="btn-ghost px-2.5 text-lg" title="Add device" aria-label="Add device">
+              <i class="bi bi-plus-lg"></i>
+            </button>
+            <button class="btn-ghost px-2.5 text-lg" title="Save devices" aria-label="Save devices">
+              <i class="bi bi-floppy"></i>
+            </button>
+            <button class="btn-ghost px-2.5 text-lg" title="Status config" aria-label="Status config">
+              <i class="bi bi-wrench"></i>
+            </button>
+            <button class="btn-ghost px-2.5 text-lg" title="Load devices" aria-label="Load devices">
+              <i class="bi bi-folder2-open"></i>
+            </button>
+          </div>
+
+          <!-- Scrollable device tabs -->
+          <div class="flex-1 min-w-0 flex flex-nowrap items-stretch gap-1.5 py-1.5 overflow-x-auto">
+            <!-- Example device tabs -->
+            <button class="btn border-accent bg-accent text-white rounded-md px-2 py-0 text-xs max-w-[180px] truncate gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_4px_rgba(76,175,80,0.5)] flex-shrink-0"></span>
+              <span class="truncate">Bart-1</span>
+            </button>
+            <button class="btn-ghost rounded-md px-2 py-0 text-xs max-w-[180px] truncate gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-black/25 flex-shrink-0"></span>
+              <span class="truncate">Bart-2</span>
+            </button>
+            <button class="btn-ghost rounded-md px-2 py-0 text-xs max-w-[180px] truncate gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-black/25 flex-shrink-0"></span>
+              <span class="truncate">Remote-DMX</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Query zone -->
+        <div class="flex-shrink-0 flex flex-col justify-center gap-1.5 px-3.5 py-2 border-r border-white/10">
+          <button class="btn-primary px-4 py-1.5 justify-center">
+            <i class="bi bi-arrow-repeat text-base leading-none"></i> Query
+          </button>
+          <label class="flex items-center gap-1.5 text-[11px] text-black/55 dark:text-white/55 cursor-pointer whitespace-nowrap font-mono">
+            <input type="checkbox" checked
+                   class="h-3.5 w-3.5 rounded-sm border-white/30 bg-white/15
+                          text-primary accent-accent">
+            All devices
+          </label>
+        </div>
+
+        <!-- Port listening zone -->
+        <div class="flex-shrink-0 flex flex-col justify-center gap-1.5 px-4 py-2 border-r border-white/10">
+          <div class="flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_6px_rgba(76,175,80,0.5)] animate-pulse-dot"></span>
+            <span class="text-xs text-black/55 dark:text-white/55 whitespace-nowrap font-mono">
+              Listening: <strong class="text-black/70 dark:text-white/70">9000</strong>
+            </span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <input type="number" value="9000" min="1" max="65535"
+                   class="w-[90px] rounded-sm border border-white/20 bg-white/20
+                          px-2 py-1 text-xs font-mono text-foreground outline-none
+                          focus:border-accent focus:bg-white dark:focus:bg-white/10
+                          placeholder:text-black/30 dark:placeholder:text-white/30">
+            <button class="btn-ghost px-3 py-1 text-xs">Apply</button>
+          </div>
+        </div>
+
+        <!-- Blackout button -->
+        <button class="btn-destructive self-stretch mx-2.5 my-1.5 flex-shrink-0 w-[110px] justify-center text-xs">
+          <i class="bi bi-stop-circle"></i> Blackout
+        </button>
+
+      </div><!-- /main row -->
+
+      <!-- ── Status strip ── -->
+      <div class="flex items-stretch bg-black/[0.06] dark:bg-white/[0.06] border-t border-white/10 min-h-[28px] font-mono">
+
+        <!-- Theme toggle -->
+        <button id="btnTheme" onclick="toggleTheme()"
+                class="flex items-center px-2.5 text-sm text-black/35 dark:text-white/35
+                       hover:text-black/55 dark:hover:text-white/55
+                       border-r border-white/10 bg-transparent cursor-pointer flex-shrink-0"
+                style="border-top:none;border-bottom:none;border-left:none;">
+          <i class="bi bi-moon-fill"></i>
+        </button>
+
+        <!-- WS status -->
+        <div class="flex items-center gap-1.5 px-4 border-r border-white/10 text-[10px] text-black/55 dark:text-white/55 whitespace-nowrap flex-shrink-0">
+          <span class="w-2 h-2 rounded-full bg-success shadow-[0_0_6px_rgba(76,175,80,0.4)]"></span>
+          <span>Connected</span>
+        </div>
+
+        <!-- Notifications -->
+        <div class="flex-1 flex items-center gap-2 px-3.5 text-[10px] text-black/35 dark:text-white/35 italic overflow-hidden min-w-0">
+          <span class="not-italic text-[13px] flex-shrink-0"><i class="bi bi-bell"></i></span>
+          <span class="truncate">No notifications</span>
+        </div>
+
+        <!-- Feed messages -->
+        <div class="flex-1 flex items-center gap-2 px-3.5 text-[10px] text-black/35 dark:text-white/35 italic overflow-hidden min-w-0 border-l border-white/10">
+          <span class="not-italic text-[13px] flex-shrink-0"><i class="bi bi-broadcast"></i></span>
+          <span class="truncate">No feed messages</span>
+        </div>
+
+        <!-- Restore -->
+        <button class="btn-ghost text-[11px] px-3 py-0.5 flex-shrink-0 mx-2.5 my-1 w-[110px] justify-center">
+          <i class="bi bi-play-circle"></i> Restore
+        </button>
+
+      </div><!-- /status strip -->
+
+    </div><!-- /hdr-content -->
+
+    <!-- ── Panel toggle buttons — 2×2 grid ── -->
+    <div class="flex-shrink-0 grid grid-cols-2 grid-rows-2 gap-1.5 p-2 border-l border-white/10 bg-black/[0.04] dark:bg-white/[0.04] w-[180px]">
+      <button class="btn border-accent bg-accent text-white rounded-md text-xs justify-center gap-1.5 hover:bg-accent-hover">
+        <i class="bi bi-broadcast text-base leading-none"></i> Feed
+      </button>
+      <button class="btn-ghost rounded-md text-xs justify-center gap-1.5">
+        <i class="bi bi-terminal text-base leading-none"></i> Serial
+      </button>
+      <button class="btn-ghost rounded-md text-xs justify-center gap-1.5">
+        <i class="bi bi-bell text-base leading-none"></i> Notifs
+      </button>
+      <button class="btn-ghost rounded-md text-xs justify-center gap-1.5">
+        <i class="bi bi-book text-base leading-none"></i> Ref
+      </button>
+    </div>
+
+  </header>
+
+  <!-- ── Body placeholder ── -->
+  <main class="flex-1 flex items-center justify-center p-12 text-muted-foreground">
+    <div class="text-center space-y-3 max-w-lg">
+      <h1 class="font-header text-2xl text-foreground">Tailwind + shadcn PoC</h1>
+      <p class="text-sm leading-relaxed">
+        This is a standalone proof-of-concept replicating the annieData
+        header using <strong>Tailwind CSS</strong> utility classes and
+        <strong>shadcn/ui</strong> design tokens. No custom CSS file needed
+        — all styling lives in the markup and the Tailwind config.
+      </p>
+      <p class="text-xs text-muted-foreground/60">
+        Toggle dark mode with the <i class="bi bi-moon-fill"></i> button
+        in the status strip.
+      </p>
+    </div>
+  </main>
+
+  <script>
+    function toggleTheme() {
+      var html = document.documentElement;
+      html.classList.add('transitioning');
+      html.classList.toggle('dark');
+      html.classList.remove('light');
+      if (!html.classList.contains('dark')) html.classList.add('light');
+      setTimeout(function () { html.classList.remove('transitioning'); }, 300);
+    }
+  </script>
+</body>
+</html>

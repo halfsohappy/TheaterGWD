@@ -424,7 +424,72 @@ here to avoid a massive JS refactor.
 
 ---
 
-## 7  Alternatives Considered
+## 7  Tailwind + shadcn/ui
+
+### What is shadcn/ui?
+
+[shadcn/ui](https://ui.shadcn.com) is not a component library you
+install as a dependency — it is a **collection of copy-paste-able
+component source code** built on Tailwind CSS and Radix UI primitives.
+You own the code; there is no package version to track. Components use
+a shared set of **CSS custom properties** (`--background`, `--primary`,
+`--muted`, `--ring`, etc.) that make theming and dark mode trivial.
+
+### Why pair Tailwind with shadcn?
+
+| Benefit | Details |
+|---|---|
+| **Pre-built, accessible components** | Buttons, inputs, checkboxes, dropdowns, tooltips, dialogs — all WAI-ARIA compliant out of the box |
+| **Consistent design language** | Every component shares the same HSL variable palette; adding dark mode is a single CSS variable block |
+| **Copy-paste ownership** | No npm dependency to version-lock — you paste the source and customise freely |
+| **Works with vanilla JS** | The CSS variable system and Tailwind classes work without React; only the interactive Radix primitives require a framework |
+| **Keyboard and focus-visible** | All components ship with `focus-visible:ring` patterns — an improvement over gooey's 6 `:focus` rules |
+
+### Tradeoffs vs Tailwind alone
+
+| Concern | Impact on gooey |
+|---|---|
+| **React-centric interactivity** | shadcn components use Radix UI (React) for complex interactions (command palette, combobox, sheet). For the vanilla-JS gooey frontend, only the *visual styling patterns* transfer — interactive behaviours stay in `app.js` |
+| **HSL colour system** | shadcn uses `hsl(H S% L%)` tokens instead of hex. Gooey's existing hex palette must be converted; the PoC below shows this mapping |
+| **More CSS variables** | Adds ~15 semantic slots (background, foreground, card, muted, primary, secondary, destructive, ring, border, input, etc.) on top of the existing 68 |
+| **Component count** | shadcn ships 48+ components; gooey only needs ~10 (Button, Input, Checkbox, Badge, Tooltip, Dialog, DropdownMenu, Card, Tabs, Toggle) |
+
+### Header PoC
+
+A standalone proof-of-concept replicating the gooey header lives in
+[`poc/tailwind-header/`](../poc/tailwind-header/). It uses:
+
+- **Tailwind CSS v3** compiled via PostCSS (16 KB compiled output vs
+  88 KB current `style.css`)
+- **shadcn/ui CSS variable layer** — the same `--background`, `--primary`,
+  `--muted`, `--ring` token system with light/dark variants
+- **`@apply` component classes** — `btn-ghost`, `btn-primary`,
+  `btn-destructive` mirror shadcn's Button variants while preserving
+  semantic names that `app.js` can reference
+- **Dark mode** via `html.dark` class toggle — same mechanism gooey
+  already uses
+
+To view the PoC locally:
+
+```bash
+cd poc/tailwind-header
+npm install
+npx tailwindcss -i input.css -o output.css
+open index.html          # or any local HTTP server
+```
+
+**Key files:**
+
+| File | Purpose |
+|---|---|
+| `index.html` | Header replica — all styling is Tailwind utilities, zero custom CSS |
+| `input.css` | Tailwind entry + shadcn CSS variables + `@apply` component layer |
+| `tailwind.config.js` | Design token mapping (gooey palette → Tailwind + shadcn slots) |
+| `output.css` | Compiled output (16 KB minified) — included so the HTML can be opened directly |
+
+---
+
+## 8  Alternatives Considered
 
 | Option | Pros | Cons |
 |---|---|---|
@@ -432,11 +497,12 @@ here to avoid a massive JS refactor.
 | **CSS Modules** | Scoped styles, no naming collisions | Requires a bundler (Vite/Webpack), heavy tooling for a Flask app |
 | **Open Props** | CSS custom-property design tokens, no build step | Doesn't address class naming or dead-code, smaller community |
 | **UnoCSS** | Atomic CSS like Tailwind but faster builds | Smaller ecosystem, fewer plugins, same HTML-verbosity trade-off |
-| **Tailwind CSS** (recommended for evaluation) | Huge ecosystem, excellent docs, JIT, dark mode, plugins | Build step required, verbose HTML, learning curve |
+| **Tailwind CSS** | Huge ecosystem, excellent docs, JIT, dark mode, plugins | Build step required, verbose HTML, learning curve |
+| **Tailwind + shadcn/ui** (recommended) | All Tailwind benefits + accessible component patterns, HSL theming, copy-paste ownership | React-centric interactivity doesn't transfer to vanilla JS; only styling patterns apply |
 
 ---
 
-## 8  Recommendation
+## 9  Recommendation
 
 **Do a time-boxed proof of concept (2–3 days).**
 
@@ -448,9 +514,15 @@ here to avoid a massive JS refactor.
 4. If the PoC is positive, commit to the phased migration.
    If not, the toolchain addition is trivially revertible.
 
+The header PoC in `poc/tailwind-header/` demonstrates that the Tailwind +
+shadcn approach produces a **visually faithful replica** of the current
+header in a single HTML file with **no external stylesheet**, compiles
+to **16 KB** (vs 88 KB today), and supports dark mode via the same
+`html.dark` toggle already in use.
+
 The project is at a size (~3,300 lines of CSS, ~400 classes) where
 migration is **feasible but non-trivial**. Waiting longer will only make
 it harder as the stylesheet grows. If the team values design consistency,
-dark-mode reliability, and faster UI iteration, Tailwind is worth the
-investment. If zero-dependency simplicity and avoiding a build step are
-higher priorities, the current vanilla approach remains solid.
+dark-mode reliability, and faster UI iteration, Tailwind + shadcn is
+worth the investment. If zero-dependency simplicity and avoiding a build
+step are higher priorities, the current vanilla approach remains solid.

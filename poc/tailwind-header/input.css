@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── shadcn CSS variable layer — light + dark ── */
+:root {
+  --background:         0 0% 100%;
+  --foreground:         220 12% 18%;
+  --card:               0 0% 100%;
+  --card-foreground:    220 12% 18%;
+  --muted:              220 6% 96%;
+  --muted-foreground:   220 6% 46%;
+  --border:             220 6% 87%;
+  --input:              220 6% 87%;
+  --ring:               262 40% 58%;
+  --primary:            262 20% 56%;
+  --primary-foreground: 0 0% 100%;
+  --secondary:          220 6% 96%;
+  --secondary-foreground: 220 12% 18%;
+  --destructive:        0 30% 50%;
+  --destructive-foreground: 0 0% 100%;
+}
+.dark {
+  --background:         240 6% 7%;
+  --foreground:         260 10% 92%;
+  --card:               240 5% 12%;
+  --card-foreground:    260 10% 92%;
+  --muted:              240 5% 16%;
+  --muted-foreground:   260 5% 60%;
+  --border:             240 5% 22%;
+  --input:              240 5% 22%;
+  --ring:               262 30% 68%;
+  --primary:            262 25% 66%;
+  --primary-foreground: 0 0% 100%;
+  --secondary:          240 5% 16%;
+  --secondary-foreground: 260 10% 92%;
+  --destructive:        0 30% 55%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+/* Smooth dark-mode transition */
+html.transitioning,
+html.transitioning *,
+html.transitioning *::before,
+html.transitioning *::after {
+  transition: background-color 0.25s ease, color 0.25s ease,
+              border-color 0.25s ease, box-shadow 0.25s ease !important;
+}
+
+/* ── Pulsing dot animation ── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+.animate-pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+/* ── shadcn-style component classes via @apply ── */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5
+           rounded-md border text-sm font-medium font-mono
+           whitespace-nowrap cursor-pointer
+           transition-colors duration-150;
+  }
+  .btn:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-1;
+  }
+  .btn-ghost {
+    @apply btn border-white/20 bg-white/10 text-foreground
+           hover:bg-white/20 hover:border-white/30;
+  }
+  .btn-primary {
+    @apply btn bg-primary text-primary-foreground border-primary
+           hover:opacity-90;
+  }
+  .btn-destructive {
+    @apply btn bg-neutral-900 text-white border-neutral-900
+           hover:bg-black;
+  }
+  .btn-outline {
+    @apply btn border-border bg-background text-foreground
+           hover:bg-muted;
+  }
+}
