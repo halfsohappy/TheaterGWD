@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>annieData — Text Manager</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f6f4fb; --surface: #fff; --surface-alt: #f0ecf7;
+      --text: #1a1a2e; --text-muted: #6b6580; --text-dim: #9e95b0;
+      --accent: #90849c; --primary: #7c5cbf; --primary-light: #DAC7FF;
+      --danger: #d44; --success: #3a8; --warn: #e8a820;
+      --border: #e0dae8; --radius: 8px; --shadow: 0 2px 8px rgba(0,0,0,.06);
+      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --mono: 'Menlo', 'Consolas', 'Monaco', monospace;
+    }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+    button { cursor: pointer; font-family: inherit; font-size: inherit; }
+    input, select, textarea { font-family: inherit; font-size: inherit; }
+
+    /* ── Layout ── */
+    .app { display: flex; height: 100vh; overflow: hidden; }
+    .sidebar { width: 260px; min-width: 260px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .entries-panel { flex: 1; overflow-y: auto; padding: 12px 16px; }
+    .preview-panel { width: 420px; min-width: 320px; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); }
+    .sidebar-header h1 { font-size: 16px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 6px; }
+    .sidebar-header p { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .sidebar-section { padding: 10px 14px 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); }
+    .sidebar-actions { padding: 4px 14px 8px; display: flex; gap: 6px; }
+    .sidebar-actions button { font-size: 11px; padding: 2px 8px; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); }
+    .sidebar-actions button:hover { background: var(--primary-light); color: var(--primary); }
+
+    .cat-list { padding: 0 8px 12px; }
+    .cat-item { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 13px; user-select: none; }
+    .cat-item:hover { background: var(--surface-alt); }
+    .cat-item.active { background: var(--primary-light); font-weight: 600; }
+    .cat-item input[type=checkbox] { accent-color: var(--primary); }
+    .cat-count { margin-left: auto; font-size: 11px; color: var(--text-dim); background: var(--surface-alt); border-radius: 10px; padding: 1px 7px; min-width: 24px; text-align: center; }
+
+    .file-list { padding: 0 8px 12px; }
+    .file-item { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; user-select: none; color: var(--text-muted); }
+    .file-item:hover { background: var(--surface-alt); }
+    .file-item.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+    .file-item input[type=checkbox] { accent-color: var(--primary); }
+
+    .section-list { padding: 0 8px 12px; }
+    .section-item { display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; user-select: none; color: var(--text-muted); }
+    .section-item:hover { background: var(--surface-alt); }
+    .section-item.active { background: var(--primary-light); color: var(--primary); font-weight: 500; }
+    .section-item input[type=checkbox] { accent-color: var(--primary); }
+    .section-count { margin-left: auto; font-size: 10px; color: var(--text-dim); }
+
+    /* ── Topbar ── */
+    .search-box { flex: 1; min-width: 180px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); font-size: 13px; }
+    .search-box:focus { outline: 2px solid var(--primary-light); border-color: var(--primary); }
+    .topbar-badge { font-size: 12px; padding: 3px 10px; border-radius: 12px; font-weight: 600; }
+    .badge-changes { background: var(--warn); color: #fff; }
+    .badge-total { background: var(--surface-alt); color: var(--text-muted); }
+    .topbar-btn { padding: 5px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); font-size: 13px; font-weight: 500; }
+    .topbar-btn:hover { background: var(--surface-alt); }
+    .topbar-btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .topbar-btn.primary:hover { background: #6a4da8; }
+    .topbar-btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .topbar-btn.danger:hover { background: #b33; }
+
+    /* ── Entry cards ── */
+    .entry-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; box-shadow: var(--shadow); transition: border-color .15s; }
+    .entry-card:hover { border-color: var(--accent); }
+    .entry-card.modified { border-left: 3px solid var(--warn); }
+    .entry-card.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+
+    .entry-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+    .entry-badges { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+    .entry-badge { font-size: 10px; padding: 1px 7px; border-radius: 10px; background: var(--surface-alt); color: var(--text-muted); white-space: nowrap; border: 1px solid var(--border); }
+    .entry-badge.cat-buttons { background: #e8f0fe; color: #1967d2; border-color: #c5d9f7; }
+    .entry-badge.cat-headings { background: #fef3e0; color: #c77800; border-color: #f5deb3; }
+    .entry-badge.cat-descriptions { background: #e6f4ea; color: #137333; border-color: #c4e6d0; }
+    .entry-badge.cat-labels { background: #f3e8fd; color: #7b1fa2; border-color: #dcc5f5; }
+    .entry-badge.cat-placeholder { background: #fce8e6; color: #c5221f; border-color: #f5c4c0; }
+    .entry-badge.cat-tooltip { background: #e0f2f1; color: #00695c; border-color: #b2dfdb; }
+    .entry-badge.cat-empty { background: #f1f3f4; color: #5f6368; border-color: #dadce0; }
+    .entry-badge.cat-status { background: #e8eaf6; color: #3f51b5; border-color: #c5cae9; }
+    .entry-badge.cat-error { background: #fce4ec; color: #c62828; border-color: #f8bbd0; }
+    .entry-badge.cat-confirm { background: #fff3e0; color: #e65100; border-color: #ffe0b2; }
+    .entry-badge.cat-toast { background: #fff8e1; color: #f9a825; border-color: #fff59d; }
+    .entry-badge.cat-nav { background: #e8eaf6; color: #283593; border-color: #c5cae9; }
+    .entry-badge.cat-sensor { background: #e0f7fa; color: #00838f; border-color: #b2ebf2; }
+    .entry-badge.cat-tour { background: #fce4ec; color: #ad1457; border-color: #f8bbd0; }
+    .entry-badge.cat-ori { background: #f3e8fd; color: #6a1b9a; border-color: #dcc5f5; }
+    .entry-badge.cat-scene { background: #e8f5e9; color: #2e7d32; border-color: #c8e6c9; }
+    .entry-badge.cat-gate { background: #efebe9; color: #5d4037; border-color: #d7ccc8; }
+    .entry-badge.cat-modal { background: #fafafa; color: #616161; border-color: #e0e0e0; }
+    .entry-badge.cat-table { background: #eceff1; color: #455a64; border-color: #cfd8dc; }
+    .entry-badge.cat-options { background: #e0e0e0; color: #424242; border-color: #bdbdbd; }
+    .entry-badge.cat-dynamic { background: #e1f5fe; color: #0277bd; border-color: #b3e5fc; }
+    .entry-badge.cat-api { background: #ede7f6; color: #512da8; border-color: #d1c4e9; }
+    .entry-badge.cat-other { background: #f5f5f5; color: #757575; border-color: #e0e0e0; }
+
+    .entry-source { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+    .entry-source i { font-size: 10px; }
+    .entry-element { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--bg); color: var(--accent); font-family: var(--mono); }
+
+    .entry-text { margin: 6px 0; }
+    .entry-text-original { font-size: 13px; color: var(--text); padding: 6px 8px; background: var(--bg); border-radius: 4px; border: 1px solid transparent; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+
+    .entry-edit { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; line-height: 1.4; background: var(--surface); resize: vertical; min-height: 32px; font-family: inherit; }
+    .entry-edit:focus { outline: 2px solid var(--primary-light); border-color: var(--primary); }
+    .entry-edit.changed { border-color: var(--warn); background: #fffbf0; }
+
+    .entry-actions { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+    .entry-btn { font-size: 11px; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); }
+    .entry-btn:hover { background: var(--surface-alt); }
+    .entry-btn.revert { color: var(--danger); }
+    .entry-btn.preview { color: var(--primary); }
+
+    /* ── Preview panel ── */
+    .preview-header { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+    .preview-header i { color: var(--primary); }
+    .preview-content { flex: 1; overflow-y: auto; padding: 12px; }
+    .preview-empty { text-align: center; color: var(--text-dim); padding: 40px 20px; font-size: 13px; }
+    .preview-section { margin-bottom: 16px; }
+    .preview-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); margin-bottom: 6px; }
+    .preview-code { font-family: var(--mono); font-size: 11px; background: #1e1e2e; color: #cdd6f4; border-radius: 6px; padding: 10px; overflow-x: auto; line-height: 1.6; }
+    .preview-rendered { border: 1px solid var(--border); border-radius: 6px; padding: 12px; background: var(--surface); min-height: 60px; }
+
+    /* ── Loading ── */
+    .loading { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+    .loading i { font-size: 24px; animation: spin 1s linear infinite; display: block; margin-bottom: 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Empty ── */
+    .no-results { text-align: center; padding: 40px 20px; color: var(--text-dim); }
+
+    /* ── Status bar ── */
+    .status-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 6px 16px; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 12px; }
+    .status-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: inline-block; }
+    .status-bar .dot.warn { background: var(--warn); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+    /* ── Toast ── */
+    .toast-container { position: fixed; top: 16px; right: 16px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 10px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,.15); animation: slideIn .25s ease-out; }
+    .toast.success { background: #e6f4ea; color: #137333; border: 1px solid #c4e6d0; }
+    .toast.error { background: #fce4ec; color: #c62828; border: 1px solid #f8bbd0; }
+    .toast.info { background: #e8f0fe; color: #1967d2; border: 1px solid #c5d9f7; }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
+  </style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h1><i class="bi bi-pencil-square"></i> Text Manager</h1>
+      <p>Edit all user-facing text in annieData</p>
+    </div>
+
+    <div class="sidebar-section">Categories</div>
+    <div class="sidebar-actions">
+      <button id="btnCatAll">Select All</button>
+      <button id="btnCatNone">Clear All</button>
+    </div>
+    <div class="cat-list" id="catList"></div>
+
+    <div class="sidebar-section">Sections</div>
+    <div class="sidebar-actions">
+      <button id="btnSecAll">All</button>
+      <button id="btnSecNone">Clear</button>
+    </div>
+    <div class="section-list" id="sectionList"></div>
+
+    <div class="sidebar-section">Files</div>
+    <div class="file-list" id="fileList"></div>
+  </aside>
+
+  <!-- ── Main panel ── -->
+  <div class="main">
+    <div class="topbar">
+      <input type="text" class="search-box" id="searchBox" placeholder="Search text content…">
+      <select id="sourceTypeFilter" class="search-box" style="flex:none;width:100px;">
+        <option value="">All types</option>
+        <option value="html">HTML</option>
+        <option value="js">JS</option>
+      </select>
+      <span class="topbar-badge badge-total" id="badgeTotal">0 entries</span>
+      <span class="topbar-badge badge-changes" id="badgeChanges" style="display:none">0 changes</span>
+      <button class="topbar-btn" id="btnRescan"><i class="bi bi-arrow-clockwise"></i> Rescan</button>
+      <button class="topbar-btn primary" id="btnApply" style="display:none"><i class="bi bi-check-lg"></i> Apply Changes</button>
+      <button class="topbar-btn danger" id="btnRevertAll" style="display:none"><i class="bi bi-x-lg"></i> Revert All</button>
+    </div>
+
+    <div class="entries-panel" id="entriesPanel">
+      <div class="loading" id="loadingMsg">
+        <i class="bi bi-arrow-repeat"></i>
+        Scanning files for user-facing text…
+      </div>
+    </div>
+
+    <div class="status-bar" id="statusBar">
+      <span class="dot"></span>
+      <span id="statusText">Ready</span>
+    </div>
+  </div>
+
+  <!-- ── Preview panel ── -->
+  <div class="preview-panel" id="previewPanel">
+    <div class="preview-header">
+      <i class="bi bi-eye"></i> Live Preview
+    </div>
+    <div class="preview-content" id="previewContent">
+      <div class="preview-empty">Click on any text entry to see a preview of it in context.</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── State ── */
+  var entries = [];
+  var edits = {};          // id → replacement text
+  var selectedId = null;
+  var activeCats = new Set();
+  var activeSections = new Set();
+  var activeFiles = new Set();
+  var searchQuery = "";
+  var sourceTypeFilter = "";
+
+  /* ── DOM refs ── */
+  var entriesPanel = document.getElementById("entriesPanel");
+  var catList = document.getElementById("catList");
+  var sectionList = document.getElementById("sectionList");
+  var fileList = document.getElementById("fileList");
+  var searchBox = document.getElementById("searchBox");
+  var sourceTypeSelect = document.getElementById("sourceTypeFilter");
+  var badgeTotal = document.getElementById("badgeTotal");
+  var badgeChanges = document.getElementById("badgeChanges");
+  var btnApply = document.getElementById("btnApply");
+  var btnRevertAll = document.getElementById("btnRevertAll");
+  var btnRescan = document.getElementById("btnRescan");
+  var previewContent = document.getElementById("previewContent");
+  var statusText = document.getElementById("statusText");
+
+  /* ── Category CSS class mapping ── */
+  var CAT_CLASSES = {
+    "Buttons & Actions": "cat-buttons",
+    "Headings & Titles": "cat-headings",
+    "Descriptions & Help Text": "cat-descriptions",
+    "Form Labels": "cat-labels",
+    "Placeholder Text": "cat-placeholder",
+    "Tooltip & Hover Text": "cat-tooltip",
+    "Empty States": "cat-empty",
+    "Status Messages": "cat-status",
+    "Error Messages": "cat-error",
+    "Confirmation Dialogs": "cat-confirm",
+    "Notification & Toast Text": "cat-toast",
+    "Navigation": "cat-nav",
+    "Sensor Labels": "cat-sensor",
+    "Tour & Onboarding": "cat-tour",
+    "Ori-Related": "cat-ori",
+    "Scene-Related": "cat-scene",
+    "Gate & Conditions": "cat-gate",
+    "Modal Text": "cat-modal",
+    "Table Headers": "cat-table",
+    "Options & Dropdowns": "cat-options",
+    "Dynamic Text (JS)": "cat-dynamic",
+    "API Reference": "cat-api",
+    "Other Text": "cat-other",
+  };
+
+  /* ── Toast ── */
+  function showToast(msg, type) {
+    type = type || "info";
+    var el = document.createElement("div");
+    el.className = "toast " + type;
+    el.textContent = msg;
+    document.getElementById("toastContainer").appendChild(el);
+    setTimeout(function () { el.remove(); }, 3500);
+  }
+
+  /* ── API helpers ── */
+  function apiPost(endpoint, data) {
+    return fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: data ? JSON.stringify(data) : "{}"
+    }).then(function (r) { return r.json(); });
+  }
+
+  /* ── Scan ── */
+  function doScan() {
+    entriesPanel.innerHTML = '<div class="loading"><i class="bi bi-arrow-repeat"></i>Scanning files…</div>';
+    apiPost("/api/scan").then(function (res) {
+      entries = res.entries || [];
+      edits = {};
+      buildFilters();
+      renderEntries();
+      updateBadges();
+      statusText.textContent = "Scanned — " + entries.length + " text entries found";
+      showToast("Found " + entries.length + " text entries", "success");
+    }).catch(function (err) {
+      entriesPanel.innerHTML = '<div class="no-results">Scan failed: ' + err.message + '</div>';
+      showToast("Scan failed", "error");
+    });
+  }
+
+  /* ── Build sidebar filters ── */
+  function buildFilters() {
+    // Collect all categories, sections, files
+    var catCounts = {};
+    var secCounts = {};
+    var fileCounts = {};
+
+    entries.forEach(function (e) {
+      (e.categories || []).forEach(function (c) {
+        catCounts[c] = (catCounts[c] || 0) + 1;
+      });
+      secCounts[e.section || "General"] = (secCounts[e.section || "General"] || 0) + 1;
+      fileCounts[e.file] = (fileCounts[e.file] || 0) + 1;
+    });
+
+    // Sort categories by count (descending)
+    var cats = Object.keys(catCounts).sort(function (a, b) { return catCounts[b] - catCounts[a]; });
+    activeCats = new Set(cats);
+
+    catList.innerHTML = "";
+    cats.forEach(function (cat) {
+      var div = document.createElement("label");
+      div.className = "cat-item active";
+      div.innerHTML = '<input type="checkbox" checked data-cat="' + cat + '"> ' +
+        '<span>' + cat + '</span><span class="cat-count">' + catCounts[cat] + '</span>';
+      catList.appendChild(div);
+      div.querySelector("input").addEventListener("change", function () {
+        if (this.checked) activeCats.add(cat); else activeCats.delete(cat);
+        div.classList.toggle("active", this.checked);
+        renderEntries();
+      });
+    });
+
+    // Sections
+    var secs = Object.keys(secCounts).sort();
+    activeSections = new Set(secs);
+
+    sectionList.innerHTML = "";
+    secs.forEach(function (sec) {
+      var div = document.createElement("label");
+      div.className = "section-item active";
+      div.innerHTML = '<input type="checkbox" checked data-sec="' + sec + '"> ' +
+        '<span>' + sec + '</span><span class="section-count">' + secCounts[sec] + '</span>';
+      sectionList.appendChild(div);
+      div.querySelector("input").addEventListener("change", function () {
+        if (this.checked) activeSections.add(sec); else activeSections.delete(sec);
+        div.classList.toggle("active", this.checked);
+        renderEntries();
+      });
+    });
+
+    // Files
+    var files = Object.keys(fileCounts).sort();
+    activeFiles = new Set(files);
+
+    fileList.innerHTML = "";
+    files.forEach(function (f) {
+      var div = document.createElement("label");
+      div.className = "file-item active";
+      var short = f.split("/").pop();
+      div.innerHTML = '<input type="checkbox" checked data-file="' + f + '"> ' +
+        '<span>' + short + '</span><span class="section-count">' + fileCounts[f] + '</span>';
+      fileList.appendChild(div);
+      div.querySelector("input").addEventListener("change", function () {
+        if (this.checked) activeFiles.add(f); else activeFiles.delete(f);
+        div.classList.toggle("active", this.checked);
+        renderEntries();
+      });
+    });
+  }
+
+  /* ── Filter entries ── */
+  function getFilteredEntries() {
+    return entries.filter(function (e) {
+      // Category filter: entry must have at least one active category
+      var hasCat = (e.categories || []).some(function (c) { return activeCats.has(c); });
+      if (!hasCat) return false;
+
+      // Section filter
+      if (!activeSections.has(e.section || "General")) return false;
+
+      // File filter
+      if (!activeFiles.has(e.file)) return false;
+
+      // Source type filter
+      if (sourceTypeFilter && e.source_type !== sourceTypeFilter) return false;
+
+      // Search filter
+      if (searchQuery) {
+        var q = searchQuery.toLowerCase();
+        var haystack = (e.text + " " + (e.categories || []).join(" ") + " " + e.element_info + " " + e.file).toLowerCase();
+        if (haystack.indexOf(q) === -1) return false;
+      }
+
+      return true;
+    });
+  }
+
+  /* ── Render entries ── */
+  function renderEntries() {
+    var filtered = getFilteredEntries();
+    badgeTotal.textContent = filtered.length + " / " + entries.length + " entries";
+
+    if (filtered.length === 0) {
+      entriesPanel.innerHTML = '<div class="no-results"><i class="bi bi-search" style="font-size:24px;display:block;margin-bottom:8px"></i>No entries match your filters.</div>';
+      return;
+    }
+
+    // Virtual-ish rendering: show first 200, then lazy-load
+    var maxShow = 200;
+    var showing = filtered.slice(0, maxShow);
+
+    var html = "";
+    showing.forEach(function (e) {
+      var isModified = edits[e.id] !== undefined && edits[e.id] !== e.text;
+      var isSelected = e.id === selectedId;
+      var displayText = edits[e.id] !== undefined ? edits[e.id] : e.text;
+
+      html += '<div class="entry-card' + (isModified ? ' modified' : '') + (isSelected ? ' selected' : '') + '" data-id="' + e.id + '">';
+
+      // Header: badges + source
+      html += '<div class="entry-header">';
+      html += '<div class="entry-badges">';
+      (e.categories || []).forEach(function (cat) {
+        var cls = CAT_CLASSES[cat] || "cat-other";
+        html += '<span class="entry-badge ' + cls + '">' + cat + '</span>';
+      });
+      html += '</div>';
+      html += '<span class="entry-element">&lt;' + escHtml(e.element_info) + '&gt;</span>';
+      html += '<span class="entry-source"><i class="bi bi-file-code"></i> ' + escHtml(e.file) + ':' + e.line + '</span>';
+      html += '</div>';
+
+      // Text: original (if modified, show strikethrough)
+      if (isModified) {
+        html += '<div class="entry-text"><div class="entry-text-original" style="text-decoration:line-through;color:var(--text-dim)">' + escHtml(e.text) + '</div></div>';
+      }
+
+      // Edit field
+      html += '<div class="entry-text">';
+      html += '<textarea class="entry-edit' + (isModified ? ' changed' : '') + '" data-id="' + e.id + '" rows="' + Math.min(4, Math.ceil(displayText.length / 80) + 1) + '">' + escHtml(displayText) + '</textarea>';
+      html += '</div>';
+
+      // Actions
+      html += '<div class="entry-actions">';
+      html += '<button class="entry-btn preview" data-id="' + e.id + '" title="Preview in context"><i class="bi bi-eye"></i> Preview</button>';
+      if (isModified) {
+        html += '<button class="entry-btn revert" data-id="' + e.id + '" title="Revert to original"><i class="bi bi-arrow-counterclockwise"></i> Revert</button>';
+      }
+      html += '<span style="margin-left:auto;font-size:11px;color:var(--text-dim)">' + e.section + '</span>';
+      html += '</div>';
+
+      html += '</div>';
+    });
+
+    if (filtered.length > maxShow) {
+      html += '<div class="no-results">Showing ' + maxShow + ' of ' + filtered.length + ' entries. Narrow your filters to see more.</div>';
+    }
+
+    entriesPanel.innerHTML = html;
+
+    // Attach event listeners
+    entriesPanel.querySelectorAll(".entry-edit").forEach(function (el) {
+      el.addEventListener("input", function () {
+        var id = this.dataset.id;
+        var entry = entries.find(function (e) { return e.id === id; });
+        if (!entry) return;
+        var val = this.value;
+        if (val === entry.text) {
+          delete edits[id];
+          this.classList.remove("changed");
+          this.closest(".entry-card").classList.remove("modified");
+        } else {
+          edits[id] = val;
+          this.classList.add("changed");
+          this.closest(".entry-card").classList.add("modified");
+        }
+        updateBadges();
+      });
+    });
+
+    entriesPanel.querySelectorAll(".entry-btn.preview").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = this.dataset.id;
+        selectedId = id;
+        // Highlight selected card
+        entriesPanel.querySelectorAll(".entry-card").forEach(function (c) {
+          c.classList.toggle("selected", c.dataset.id === id);
+        });
+        loadPreview(id);
+      });
+    });
+
+    entriesPanel.querySelectorAll(".entry-btn.revert").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = this.dataset.id;
+        delete edits[id];
+        renderEntries();
+        updateBadges();
+        if (selectedId === id) loadPreview(id);
+      });
+    });
+  }
+
+  /* ── Update badges ── */
+  function updateBadges() {
+    var changeCount = Object.keys(edits).length;
+    if (changeCount > 0) {
+      badgeChanges.textContent = changeCount + " change" + (changeCount > 1 ? "s" : "");
+      badgeChanges.style.display = "";
+      btnApply.style.display = "";
+      btnRevertAll.style.display = "";
+    } else {
+      badgeChanges.style.display = "none";
+      btnApply.style.display = "none";
+      btnRevertAll.style.display = "none";
+    }
+  }
+
+  /* ── Load preview ── */
+  function loadPreview(id) {
+    var entry = entries.find(function (e) { return e.id === id; });
+    if (!entry) return;
+
+    var replacement = edits[id] || entry.text;
+    apiPost("/api/preview", {
+      file: entry.file,
+      line: entry.line,
+      text: entry.text,
+      replacement: replacement
+    }).then(function (res) {
+      var html = '';
+
+      // Info section
+      html += '<div class="preview-section">';
+      html += '<div class="preview-section-title">Entry Info</div>';
+      html += '<div style="font-size:12px;color:var(--text-muted);line-height:1.7">';
+      html += '<strong>File:</strong> ' + escHtml(entry.file) + '<br>';
+      html += '<strong>Line:</strong> ' + entry.line + '<br>';
+      html += '<strong>Element:</strong> <code>' + escHtml(entry.element_info) + '</code><br>';
+      html += '<strong>Section:</strong> ' + escHtml(entry.section) + '<br>';
+      html += '<strong>Type:</strong> ' + entry.source_type.toUpperCase() + '<br>';
+      html += '<strong>Categories:</strong> ' + (entry.categories || []).join(", ");
+      html += '</div></div>';
+
+      // Code context
+      html += '<div class="preview-section">';
+      html += '<div class="preview-section-title">Source Context</div>';
+      html += '<div class="preview-code">' + res.html + '</div>';
+      html += '</div>';
+
+      // Rendered preview (for HTML entries)
+      if (entry.source_type === "html") {
+        html += '<div class="preview-section">';
+        html += '<div class="preview-section-title">Rendered Preview</div>';
+        html += '<div class="preview-rendered">';
+        html += renderHTMLPreview(entry, replacement);
+        html += '</div></div>';
+      }
+
+      previewContent.innerHTML = html;
+    }).catch(function () {
+      previewContent.innerHTML = '<div class="preview-empty">Failed to load preview.</div>';
+    });
+  }
+
+  /* ── Render a mini HTML preview ── */
+  function renderHTMLPreview(entry, text) {
+    var el = entry.element_info;
+    if (el.indexOf("attr:") === 0) {
+      var attr = el.split(":")[1];
+      if (attr === "placeholder") {
+        return '<input type="text" placeholder="' + escHtml(text) + '" style="padding:6px 10px;border:1px solid #ccc;border-radius:4px;width:100%;font-size:13px;color:#999" disabled>';
+      }
+      if (attr === "title" || attr === "aria-label") {
+        return '<div style="background:#333;color:#fff;padding:6px 10px;border-radius:4px;font-size:12px;display:inline-block">' + escHtml(text) + '</div>';
+      }
+    }
+    var tag = el;
+    if (tag === "button" || tag === "a") {
+      return '<button style="padding:6px 14px;background:var(--primary);color:#fff;border:none;border-radius:4px;font-size:13px">' + escHtml(text) + '</button>';
+    }
+    if (tag === "h2" || tag === "h3") {
+      return '<' + tag + ' style="font-size:' + (tag === "h2" ? "18" : "15") + 'px;font-weight:600">' + escHtml(text) + '</' + tag + '>';
+    }
+    if (tag === "label") {
+      return '<label style="font-size:13px;font-weight:500">' + escHtml(text) + '</label>';
+    }
+    if (tag === "option" || tag === "optgroup") {
+      return '<select style="padding:4px 8px;font-size:13px"><option>' + escHtml(text) + '</option></select>';
+    }
+    if (tag === "th") {
+      return '<table style="border-collapse:collapse"><tr><th style="padding:6px 10px;background:#f0ecf7;border:1px solid #e0dae8;font-size:12px;font-weight:600">' + escHtml(text) + '</th></tr></table>';
+    }
+    if (tag === "p" || tag === "span" || tag === "div") {
+      return '<p style="font-size:13px;line-height:1.5">' + escHtml(text) + '</p>';
+    }
+    return '<div style="font-size:13px">' + escHtml(text) + '</div>';
+  }
+
+  /* ── Apply changes ── */
+  function applyChanges() {
+    var editPayload = {};
+    Object.keys(edits).forEach(function (id) {
+      var entry = entries.find(function (e) { return e.id === id; });
+      if (!entry) return;
+      editPayload[id] = {
+        file: entry.file,
+        line: entry.line,
+        original: entry.text,
+        replacement: edits[id]
+      };
+    });
+
+    if (Object.keys(editPayload).length === 0) {
+      showToast("No changes to apply", "info");
+      return;
+    }
+
+    statusText.textContent = "Applying changes…";
+    apiPost("/api/apply", { edits: editPayload }).then(function (res) {
+      showToast("Applied " + res.applied + " changes" + (res.skipped ? ", skipped " + res.skipped : ""), res.applied > 0 ? "success" : "info");
+      if (res.errors && res.errors.length > 0) {
+        res.errors.forEach(function (err) { showToast(err, "error"); });
+      }
+      edits = {};
+      // Re-fetch entries from the server (already re-scanned)
+      fetch("/api/entries").then(function (r) { return r.json(); }).then(function (data) {
+        entries = data.entries || [];
+        buildFilters();
+        renderEntries();
+        updateBadges();
+        statusText.textContent = "Changes applied — " + entries.length + " entries";
+      });
+    }).catch(function (err) {
+      showToast("Apply failed: " + err.message, "error");
+      statusText.textContent = "Apply failed";
+    });
+  }
+
+  /* ── Helpers ── */
+  function escHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  /* ── Event listeners ── */
+  searchBox.addEventListener("input", function () {
+    searchQuery = this.value;
+    renderEntries();
+  });
+
+  sourceTypeSelect.addEventListener("change", function () {
+    sourceTypeFilter = this.value;
+    renderEntries();
+  });
+
+  btnRescan.addEventListener("click", function () {
+    if (Object.keys(edits).length > 0) {
+      if (!confirm("Rescan will discard unsaved changes. Continue?")) return;
+    }
+    doScan();
+  });
+
+  btnApply.addEventListener("click", function () {
+    var count = Object.keys(edits).length;
+    if (confirm("Apply " + count + " text change" + (count > 1 ? "s" : "") + " to source files?")) {
+      applyChanges();
+    }
+  });
+
+  btnRevertAll.addEventListener("click", function () {
+    if (confirm("Revert all changes?")) {
+      edits = {};
+      renderEntries();
+      updateBadges();
+      showToast("All changes reverted", "info");
+    }
+  });
+
+  document.getElementById("btnCatAll").addEventListener("click", function () {
+    catList.querySelectorAll("input").forEach(function (cb) { cb.checked = true; activeCats.add(cb.dataset.cat); cb.closest(".cat-item").classList.add("active"); });
+    renderEntries();
+  });
+  document.getElementById("btnCatNone").addEventListener("click", function () {
+    catList.querySelectorAll("input").forEach(function (cb) { cb.checked = false; activeCats.delete(cb.dataset.cat); cb.closest(".cat-item").classList.remove("active"); });
+    renderEntries();
+  });
+  document.getElementById("btnSecAll").addEventListener("click", function () {
+    sectionList.querySelectorAll("input").forEach(function (cb) { cb.checked = true; activeSections.add(cb.dataset.sec); cb.closest(".section-item").classList.add("active"); });
+    renderEntries();
+  });
+  document.getElementById("btnSecNone").addEventListener("click", function () {
+    sectionList.querySelectorAll("input").forEach(function (cb) { cb.checked = false; activeSections.delete(cb.dataset.sec); cb.closest(".section-item").classList.remove("active"); });
+    renderEntries();
+  });
+
+  /* ── Init ── */
+  doScan();
+
+})();
+</script>
+</body>
+</html>
