@@ -22,7 +22,7 @@
     (function(){
       if (GOOEY_DEMO) return; // demo always uses light mode
       var t = localStorage.getItem('gooey-theme');
-      if (t !== 'light')
+      if (t === 'dark')
         document.documentElement.classList.add('dark');
     })();
   </script>
