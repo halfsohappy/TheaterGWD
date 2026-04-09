@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import sys
 import threading
 
 import markdown as md_lib
@@ -16,7 +17,19 @@ from flask_socketio import SocketIO, join_room, leave_room
 from .osc_handler import OSCEngine
 from .script_runner import ScriptRunner
 
-app = Flask(__name__)
+# In a PyInstaller one-file bundle Flask's auto root_path resolution can fail
+# because the app package is loaded from the .pyz archive, not real files.
+# Explicitly set template_folder and static_folder using sys._MEIPASS when frozen.
+if getattr(sys, "frozen", False):
+    _app_dir = os.path.join(sys._MEIPASS, "app")
+else:
+    _app_dir = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(_app_dir, "templates"),
+    static_folder=os.path.join(_app_dir, "static"),
+)
 app.config["SECRET_KEY"] = "theatergwd-control-center"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 DEMO_MODE = os.environ.get("DEMO_MODE", "").lower() == "true"
