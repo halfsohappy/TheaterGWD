@@ -107,7 +107,7 @@
       <div class="flex items-stretch bg-black/[0.06] dark:bg-white/[0.06] border-t border-white/10 min-h-[28px] font-mono">
 
         <!-- Theme toggle -->
-        <button id="btnTheme" onclick="toggleTheme()"
+        <button id="btnTheme"
                 class="flex items-center px-2.5 text-sm text-black/35 dark:text-white/35
                        hover:text-black/55 dark:hover:text-white/55
                        border-r border-white/10 bg-transparent cursor-pointer flex-shrink-0"
@@ -178,14 +178,17 @@
   </main>
 
   <script>
-    function toggleTheme() {
-      var html = document.documentElement;
-      html.classList.add('transitioning');
-      html.classList.toggle('dark');
-      html.classList.remove('light');
-      if (!html.classList.contains('dark')) html.classList.add('light');
-      setTimeout(function () { html.classList.remove('transitioning'); }, 300);
-    }
+    (function () {
+      "use strict";
+      document.getElementById("btnTheme").addEventListener("click", function () {
+        var html = document.documentElement;
+        html.classList.add("transitioning");
+        html.classList.toggle("dark");
+        if (!html.classList.contains("dark")) html.classList.add("light");
+        else html.classList.remove("light");
+        setTimeout(function () { html.classList.remove("transitioning"); }, 300);
+      });
+    })();
   </script>
 </body>
 </html>

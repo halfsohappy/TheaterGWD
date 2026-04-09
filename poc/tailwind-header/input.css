@@ -77,8 +77,4 @@ html.transitioning *::after {
     @apply btn bg-neutral-900 text-white border-neutral-900
            hover:bg-black;
   }
-  .btn-outline {
-    @apply btn border-border bg-background text-foreground
-           hover:bg-muted;
-  }
 }
