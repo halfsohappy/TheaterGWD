@@ -7,11 +7,165 @@ to all user-facing text in the annieData Control Center.
 
 import json
 import os
+import re
 from dataclasses import asdict
 
 from flask import Flask, jsonify, render_template, request
 
 from .extractor import apply_edits, scan_all
+
+# ---------------------------------------------------------------------------
+# Fragment rendering helpers
+# ---------------------------------------------------------------------------
+
+_JINJA_VAR_RE = re.compile(r'\{\{[^}]*\}\}')
+_JINJA_BLOCK_RE = re.compile(r'\{%-?[^%]*-?%\}')
+_SCRIPT_BLOCK_RE = re.compile(r'<script\b[^>]*?>.*?</script>', re.DOTALL | re.IGNORECASE)
+
+# Patterns that indicate a structural container worth using as viewport root.
+_CONTAINER_PAT = re.compile(
+    r'class="card(?:\s|")|class="welcome-banner|class="form-row\b|'
+    r'class="bulk-action-row|class="modal-content|class="onboard|'
+    r'class="msg-scene-filter|class="hdr-content|class="dev-dropdown|'
+    r'<section\b',
+    re.IGNORECASE,
+)
+
+# Inline CSS for the simulated-element previews used by JS entries.
+_JS_PREVIEW_CSS = (
+    'body{margin:16px;background:#f6f4fb;font-family:system-ui,sans-serif;}'
+    '.preview-wrap{display:flex;flex-direction:column;gap:12px;}'
+)
+
+
+def _strip_jinja(line: str) -> str:
+    """Remove Jinja2 directives and replace variables with a placeholder."""
+    line = _JINJA_BLOCK_RE.sub('', line)
+    line = _JINJA_VAR_RE.sub(
+        '<span class="tm-jinja">[…]</span>', line
+    )
+    return line
+
+
+def _build_html_fragment(all_lines: list, entry, replacement) -> str:
+    """Return a srcdoc-ready HTML document built from the entry's source file."""
+    n = len(all_lines)
+    target_idx = entry.line - 1  # 0-based
+
+    # Walk backward to find the nearest enclosing structural container.
+    lo = max(0, target_idx - 5)
+    for i in range(target_idx, max(-1, target_idx - 50), -1):
+        if _CONTAINER_PAT.search(all_lines[i]):
+            lo = i
+            break
+
+    hi = min(n, lo + 44)
+
+    # Process each line: strip Jinja2, then highlight the target line.
+    target_text = entry.text
+    repl_text = replacement if replacement is not None else target_text
+    is_modified = repl_text != target_text
+
+    esc_t = target_text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    esc_r = repl_text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    fragment_parts = []
+    for i in range(lo, hi):
+        raw = all_lines[i].rstrip('\n')
+        processed = _strip_jinja(raw)
+
+        if i == target_idx and target_text:
+            if is_modified:
+                mark = (
+                    f'<del class="tm-del">{esc_t}</del>'
+                    f'<ins class="tm-ins">{esc_r}</ins>'
+                )
+            else:
+                mark = f'<mark class="tm-hl">{esc_t}</mark>'
+
+            # Try replacing raw text first, then HTML-escaped form.
+            if target_text in processed:
+                processed = processed.replace(target_text, mark, 1)
+            elif esc_t != target_text and esc_t in processed:
+                processed = processed.replace(esc_t, mark, 1)
+            else:
+                # Fallback: highlight the entire line.
+                processed = '<div class="tm-line-hl">' + processed + '</div>'
+
+        fragment_parts.append(processed)
+
+    fragment = '\n'.join(fragment_parts)
+    fragment = _SCRIPT_BLOCK_RE.sub('', fragment)
+    return _wrap_srcdoc(fragment)
+
+
+def _build_js_fragment(entry, replacement) -> str:
+    """Return a srcdoc-ready HTML document simulating a JS-injected element."""
+    text = replacement if replacement is not None else entry.text
+    el = entry.element_info.lower()
+    esc = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    if 'toast' in el or 'showtoast' in el:
+        body = (
+            '<div style="background:#e8f0fe;color:#1967d2;border:1px solid #c5d9f7;'
+            'border-radius:8px;padding:10px 16px;font-size:13px;font-weight:500;'
+            'box-shadow:0 4px 12px rgba(0,0,0,.15);display:inline-block">'
+            + esc + '</div>'
+        )
+    elif 'confirm' in el:
+        body = (
+            '<div style="border:1px solid #e0dae8;border-radius:8px;padding:16px;'
+            'background:#fff;max-width:320px">'
+            '<p style="margin:0 0 12px;font-size:14px">' + esc + '</p>'
+            '<div style="display:flex;gap:8px">'
+            '<button style="padding:5px 14px;background:#7c5cbf;color:#fff;border:none;border-radius:4px">OK</button>'
+            '<button style="padding:5px 14px;background:#f0ecf7;border:1px solid #e0dae8;border-radius:4px">Cancel</button>'
+            '</div></div>'
+        )
+    elif 'textcontent' in el or 'innerhtml' in el or 'innertext' in el:
+        body = '<p style="font-size:14px;color:#1a1a2e;line-height:1.5">' + esc + '</p>'
+    elif 'tour_step' in el or 'tour' in el:
+        body = (
+            '<div style="background:#fff;border:1px solid #e0dae8;border-radius:8px;'
+            'padding:16px;max-width:300px">'
+            '<p style="font-size:13px;color:#1a1a2e;margin:0">' + esc + '</p></div>'
+        )
+    elif 'label' in el or 'hint' in el:
+        body = '<label style="font-size:13px;font-weight:500;color:#1a1a2e">' + esc + '</label>'
+    else:
+        body = '<div style="font-size:13px;color:#1a1a2e">' + esc + '</div>'
+
+    return _wrap_srcdoc(
+        '<div class="preview-wrap">' + body + '</div>',
+        extra_css=_JS_PREVIEW_CSS,
+    )
+
+
+def _wrap_srcdoc(fragment: str, extra_css: str = '') -> str:
+    """Wrap an HTML fragment in a full srcdoc document with the app's CSS."""
+    return (
+        '<!DOCTYPE html><html><head>'
+        '<meta charset="UTF-8">'
+        '<base href="http://127.0.0.1:5001/">'
+        '<link rel="stylesheet" href="/static/css/style.css">'
+        '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">'
+        '<style>'
+        'html,body{margin:0;padding:8px;background:var(--bg,#f6f4fb);}'
+        '.tm-hl{background:#fff3b0!important;outline:2px solid #e8a820;border-radius:2px;}'
+        '.tm-del{background:#fdd;text-decoration:line-through;border-radius:2px;}'
+        '.tm-ins{background:#dfd;text-decoration:none;border-radius:2px;}'
+        '.tm-jinja{color:#bbb;font-style:italic;font-size:11px;}'
+        '.tm-line-hl{background:#fff3b0;outline:1px solid #e8a820;display:block;}'
+        + extra_css +
+        '</style>'
+        '<script>window.addEventListener("load",function(){'
+        'var e=document.querySelector(".tm-hl,.tm-del,.tm-ins,.tm-line-hl");'
+        'if(e)e.scrollIntoView({block:"center"});'
+        '});</script>'
+        '</head><body>'
+        + fragment
+        + '</body></html>'
+    )
 
 # Allowlisted relative paths that the tool is permitted to read/write.
 # Only files within these directories (under gooey/) are accessible.
@@ -101,6 +255,31 @@ def create_app(gooey_dir: str) -> Flask:
         with open(abs_path, encoding="utf-8") as f:
             content = f.read()
         return jsonify({"status": "ok", "content": content})
+
+    @app.route("/api/fragment", methods=["POST"])
+    def api_fragment():
+        """Return a srcdoc-ready HTML document for a gallery viewport."""
+        data = request.get_json(force=True)
+        entry_id = data.get("id", "")
+        replacement = data.get("replacement", None)
+
+        entry = next((e for e in _entries_cache if e.id == entry_id), None)
+        if not entry:
+            return jsonify({"status": "error", "html": ""})
+
+        if entry.source_type == "js":
+            html_doc = _build_js_fragment(entry, replacement)
+            return jsonify({"status": "ok", "html": html_doc})
+
+        abs_path = _safe_resolve(_gooey_dir, entry.file)
+        if not abs_path or not os.path.isfile(abs_path):
+            return jsonify({"status": "error", "html": ""})
+
+        with open(abs_path, encoding="utf-8") as f:
+            all_lines = f.readlines()
+
+        html_doc = _build_html_fragment(all_lines, entry, replacement)
+        return jsonify({"status": "ok", "html": html_doc})
 
     @app.route("/api/preview", methods=["POST"])
     def api_preview():
