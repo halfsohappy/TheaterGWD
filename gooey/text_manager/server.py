@@ -80,8 +80,8 @@ def _build_html_fragment(all_lines: list, entry, replacement, base_url: str = ''
         raw = all_lines[i].rstrip('\n')
         line_lower = raw.lower()
 
-        # Track <script> blocks line by line to avoid ReDoS from a regex on
-        # the full concatenated fragment string.
+        # Track <script> blocks line by line to avoid running a regex on the
+        # full concatenated fragment string (which can be large and slow).
         if in_script:
             if '</script' in line_lower:
                 in_script = False
@@ -287,7 +287,8 @@ def create_app(gooey_dir: str) -> Flask:
             return jsonify({"status": "error", "html": ""})
 
         # Derive the base URL from the current request so the srcdoc's <base>
-        # tag points at the correct host regardless of configured port.
+        # tag points at the correct host regardless of configured port
+        # (text manager default: 5001; annieData Control Center default: 5000).
         base_url = request.host_url  # e.g. "http://127.0.0.1:5001/"
 
         if entry.source_type == "js":

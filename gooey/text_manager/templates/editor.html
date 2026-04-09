@@ -284,9 +284,10 @@
   var _lazyObserver = null;
 
   /* ── Rendering constants ── */
-  var MAX_GALLERY_CARDS = 120;   // cap for gallery mode (performance)
-  var MAX_LIST_ENTRIES = 200;    // cap for list mode
+  var MAX_GALLERY_CARDS = 120;         // cap for gallery mode (performance)
+  var MAX_LIST_ENTRIES = 200;          // cap for list mode
   var LAZY_LOAD_MARGIN = "300px 0px";  // IntersectionObserver rootMargin
+  var VIEWPORT_REFRESH_DEBOUNCE_MS = 600;  // ms after typing stops before refreshing iframe
 
   /* ── DOM refs ── */
   var app = document.getElementById("app");
@@ -573,7 +574,7 @@
         if (viewport) {
           _viewportRefreshTimers[id] = setTimeout(function () {
             refreshViewport(viewport, id);
-          }, 600);
+          }, VIEWPORT_REFRESH_DEBOUNCE_MS);
         }
       });
     });
