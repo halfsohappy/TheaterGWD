@@ -395,7 +395,7 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
         return;
     }
 
-    if (norm_adr == "/on_change") {
+    if (norm_adr == "/onchange") {
         String arg = osc_msg.nextAsString();
         String a = osc_lower_copy(osc_trim_copy(String(arg)));
         if (a == "on" || a == "1" || a == "true") {
