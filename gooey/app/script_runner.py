@@ -360,9 +360,26 @@ class DeviceProxy:
         """Reload config from device flash."""
         self._cmd("load")
 
-    def on_change(self):
-        """Toggle duplicate-suppression on the device."""
-        self._cmd("on_change")
+    def on_change(self, enabled=None):
+        """Enable, disable, or query duplicate-suppression on the device.
+
+        Pass ``True`` or ``False`` to turn suppression on or off.
+        Call with no argument to query the current state — the device
+        replies with its current setting to the sender's port; use
+        ``on_osc("/reply/*/onchange", cb)`` to receive the reply.
+
+        Example::
+
+            device.on_change(True)   # enable — send only when value changes
+            device.on_change(False)  # disable — send every period regardless
+            device.on_change()       # query — device replies "ON_CHANGE ON/OFF"
+        """
+        payload = None
+        if enabled is True:
+            payload = "on"
+        elif enabled is False:
+            payload = "off"
+        self._cmd("onchange", payload)
 
     def flush(self):
         """Flush a pending transactional batch."""
@@ -419,11 +436,16 @@ class DeviceProxy:
     # ── Registry snapshots ──
 
     def messages(self):
-        """Return a snapshot dict of gooey's tracked message configs.
+        """Return a snapshot of gooey's locally cached message configs.
+
+        Reads from gooey's in-memory registry — this is **not** a live query
+        to the device.  The registry is populated when the UI parses list/info
+        replies from the device (e.g. after pressing Query or calling
+        ``device.list_msgs()`` and waiting for the reply to arrive).
+        If you haven't queried the device yet, this dict will be empty.
 
         Keys are message names; values are dicts with fields like
         ``value``, ``ip``, ``port``, ``adr``, ``low``, ``high``, ``enabled``.
-        Only messages that gooey has seen (via list or info replies) appear here.
         """
         did = self._ctx.get("id", "")
         with self._lock:
@@ -431,11 +453,16 @@ class DeviceProxy:
             return dict(dev.get("messages", {}))
 
     def scenes(self):
-        """Return a snapshot dict of gooey's tracked scene configs.
+        """Return a snapshot of gooey's locally cached scene configs.
+
+        Reads from gooey's in-memory registry — this is **not** a live query
+        to the device.  The registry is populated when the UI parses list/info
+        replies from the device (e.g. after pressing Query or calling
+        ``device.list_scenes()`` and waiting for the reply to arrive).
+        If you haven't queried the device yet, this dict will be empty.
 
         Keys are scene names; values are dicts with fields like
         ``period``, ``msgs``, ``enabled``, ``adrMode``.
-        Only scenes that gooey has seen appear here.
         """
         did = self._ctx.get("id", "")
         with self._lock:
@@ -445,11 +472,16 @@ class DeviceProxy:
     # ── Sensor access (device-scoped) ──
 
     def sensor(self, name):
-        """Get the latest sensor value for *this* device by short name.
+        """Get the most recently received value for a sensor by short name.
+
+        This reads from gooey's in-memory OSC cache — it does **not** send
+        any command to the device.  Data only appears here if the device is
+        actively streaming that sensor to gooey's listen port (configured via
+        messages/scenes on the device).  Returns ``0.0`` until the first OSC
+        packet for this sensor arrives.
 
         Uses device-scoped storage so two devices with the same sensor name
         (e.g. both sending ``accelX``) don't clobber each other.
-        Returns 0.0 if no data has arrived yet.
         """
         scoped = f"{self.name}/{name}"
         with self._sensor_lock:
@@ -463,7 +495,12 @@ class DeviceProxy:
         return 0.0
 
     def sensors(self):
-        """Get all current sensor values for *this* device as a dict.
+        """Get all most-recently-received sensor values for this device as a dict.
+
+        This reads from gooey's in-memory OSC cache — it does **not** send
+        any command to the device.  Only sensors that have streamed at least
+        one OSC packet to gooey's listen port appear here.  Each value is the
+        last received reading; there is no history or logging.
 
         Returns ``{"accelX": 0.5, "gyroY": 0.2, ...}`` — only sensors that
         have received data from this specific device.
@@ -580,7 +617,12 @@ class ScriptRunner:
                                        list(args) if args else None)
 
         def sensor(name):
-            """Get the latest sensor value by short name (e.g. 'accelX').
+            """Get the most recently received value for a sensor by short name.
+
+            This reads from gooey's in-memory OSC cache — it does **not** send
+            any command to the device.  Data only appears here if the device is
+            actively streaming that sensor to gooey's listen port.  Returns
+            ``0.0`` until the first OSC packet for this sensor arrives.
 
             With multiple devices, use ``device.sensor(name)`` instead —
             this unscoped version returns whichever device wrote last.
@@ -592,7 +634,12 @@ class ScriptRunner:
             return 0.0
 
         def sensors():
-            """Get all current sensor values as a dict (unscoped, all devices).
+            """Get all most-recently-received sensor values as a dict (unscoped, all devices).
+
+            This reads from gooey's in-memory OSC cache — it does **not** send
+            any command to the device.  Only sensors that have streamed at least
+            one OSC packet to gooey's listen port appear here.  Each value is the
+            last received reading; there is no history or logging.
 
             With multiple devices, use ``device.sensors()`` instead —
             this returns a merged view where same-named sensors from different
