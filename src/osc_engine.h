@@ -494,7 +494,12 @@ static inline void begin_udp(const String& start_ip, const String& start_ssid,
     IPAddress static_ip;
     if (start_ip != "dhcp") {
         static_ip.fromString(start_ip);
-        WiFi.config(static_ip);
+        // Derive a sensible gateway (first three octets + .1) and use a
+        // standard /24 subnet mask.  Without these, lwIP cannot route
+        // outbound UDP packets when a static IP is configured.
+        IPAddress gateway(static_ip[0], static_ip[1], static_ip[2], 1);
+        IPAddress subnet(255, 255, 255, 0);
+        WiFi.config(static_ip, gateway, subnet);
     }
 
     WiFi.begin(start_ssid.c_str(), start_pass.c_str());

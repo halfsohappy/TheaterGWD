@@ -258,7 +258,7 @@ static inline OscRegistry& osc_registry() {
 /// True if there is enough information to actually transmit an OSC packet:
 /// a value to send, and a resolvable destination (ip, port, address).
 inline bool OscMessage::sendable() const {
-    bool has_val = (value_ptr != nullptr) || (gate_mode == GATE_TOGGLE);
+    bool has_val = (value_ptr != nullptr) || (string_value_ptr != nullptr) || (gate_mode == GATE_TOGGLE);
     bool has_ip  = exist.ip;
     bool has_port = exist.port;
     bool has_adr = exist.adr;

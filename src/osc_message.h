@@ -184,7 +184,8 @@ public:
         osc_address = o.osc_address;
         scene_count = o.scene_count;
         for (uint8_t i = 0; i < o.scene_count; i++) scenes[i] = o.scenes[i];
-        value_ptr  = o.value_ptr;
+        value_ptr        = o.value_ptr;
+        string_value_ptr = o.string_value_ptr;
         bounds[0]  = o.bounds[0];
         bounds[1]  = o.bounds[1];
         enabled    = o.enabled;
@@ -204,7 +205,8 @@ public:
             clear_scenes();
             scene_count = o.scene_count;
             for (uint8_t i = 0; i < o.scene_count; i++) scenes[i] = o.scenes[i];
-            value_ptr  = o.value_ptr;
+            value_ptr        = o.value_ptr;
+            string_value_ptr = o.string_value_ptr;
             bounds[0]  = o.bounds[0];
             bounds[1]  = o.bounds[1];
             enabled    = o.enabled;
@@ -240,8 +242,9 @@ public:
         for (uint8_t i = 0; i < scene_count; i++)   r.add_scene(scenes[i]);
         for (uint8_t i = 0; i < o.scene_count; i++) r.add_scene(o.scenes[i]);
 
-        r.exist.val   = exist.val   || o.exist.val;
-        r.value_ptr   = exist.val   ? value_ptr : o.value_ptr;
+        r.exist.val      = exist.val   || o.exist.val;
+        r.value_ptr      = exist.val   ? value_ptr        : o.value_ptr;
+        r.string_value_ptr = exist.val ? string_value_ptr : o.string_value_ptr;
 
         r.exist.low   = exist.low   || o.exist.low;
         r.bounds[0]   = exist.low   ? bounds[0] : o.bounds[0];
