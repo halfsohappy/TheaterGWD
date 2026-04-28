@@ -35,7 +35,9 @@
 #include "osc_registry.h"  // OscRegistry singleton + method implementations
 
 // --- Device address (set during provisioning, used in command dispatch) ------
-String device_adr;
+// Definition lives in main.cpp; declared extern here to prevent ODR violations
+// if this header is ever included in multiple translation units.
+extern String device_adr;
 
 // --- Status reporting -------------------------------------------------------
 #include "osc_status.h"

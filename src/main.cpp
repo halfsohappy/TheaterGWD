@@ -21,12 +21,22 @@
 
 #include "main.h"
 
+// ---------------------------------------------------------------------------
+// Global definitions (extern declarations live in the corresponding headers)
+// ---------------------------------------------------------------------------
+
+// Sensor data array — extern volatile float declared in data_streams.h.
+volatile float data_streams[NUM_DATA_STREAMS] = {};
+
+// Device OSC address — extern declared in main.h and osc_commands.h.
+String device_adr;
+
 // Current quaternion — shared with osc_commands.h for ori save commands
-float cur_qi = 0.0f, cur_qj = 0.0f, cur_qk = 0.0f, cur_qr = 1.0f;
+volatile float cur_qi = 0.0f, cur_qj = 0.0f, cur_qk = 0.0f, cur_qr = 1.0f;
 
 // Tare reference quaternion — identity = no tare applied
-float tare_qi = 0.0f, tare_qj = 0.0f, tare_qk = 0.0f, tare_qr = 1.0f;
-bool  tare_active = false;
+volatile float tare_qi = 0.0f, tare_qj = 0.0f, tare_qk = 0.0f, tare_qr = 1.0f;
+volatile bool  tare_active = false;
 
 // Euler decomposition order — auto-selected at tare time.
 // 0 = ZYX (default, singular on Y/pitch)
@@ -44,9 +54,9 @@ float tare_up_x = 0.0f, tare_up_y = 0.0f, tare_up_z = 1.0f;
 int euler_order_override = -1;
 
 // Averaged-tare accumulation state.
-int   tare_avg_target = 0;   // 0 = not accumulating
-int   tare_avg_count  = 0;
-float tare_avg_qi = 0.0f, tare_avg_qj = 0.0f, tare_avg_qk = 0.0f, tare_avg_qr = 0.0f;
+volatile int   tare_avg_target = 0;   // 0 = not accumulating
+volatile int   tare_avg_count  = 0;
+volatile float tare_avg_qi = 0.0f, tare_avg_qj = 0.0f, tare_avg_qk = 0.0f, tare_avg_qr = 0.0f;
 
 // Runtime-configurable sensor scale factors.
 // ±g_accel_scale m/s² maps to [0,1]; ±g_gyro_scale rad/s maps to [0,1].
@@ -77,6 +87,70 @@ static bool          btn_a_held       = false; // entered hold/record mode
 static unsigned long btn_b_last       = 0;
 static constexpr unsigned long BTN_DEBOUNCE_MS = 80;
 static constexpr unsigned long BTN_HOLD_MS     = 300; // ms to trigger record
+
+// WiFi-timeout LED hook called by begin_udp() before the restart.
+// Shows red for 2 seconds so the user sees the device is about to reboot.
+void wifi_timeout_led_signal() {
+    leds[0] = CRGB(80, 0, 0);
+    FastLED.show();
+    delay(2000);
+    leds[0] = CRGB(40, 0, 40);  // back to booting-purple
+    FastLED.show();
+}
+
+// ---------------------------------------------------------------------------
+// Non-blocking LED flash state machine (ab7 only)
+// ---------------------------------------------------------------------------
+//
+// Replaces blocking delay() chains in the button handler with an async state
+// machine that progresses each time led_flash_tick() is called from loop().
+// This keeps the OSC receive path fully responsive during button-LED effects.
+
+struct LedStep {
+    CRGB     color;
+    uint16_t dur_ms;
+};
+
+struct LedFlash {
+    bool          active     = false;
+    uint8_t       step       = 0;
+    unsigned long at         = 0;
+    uint8_t       n_steps    = 0;
+    LedStep       steps[6];
+    CRGB          final_color = CRGB(0, 0, 0);
+};
+static LedFlash _led_flash;
+
+static void start_led_flash(const LedStep* steps, uint8_t n, CRGB final_color) {
+    _led_flash.active      = true;
+    _led_flash.step        = 0;
+    _led_flash.at          = millis();
+    _led_flash.n_steps     = n;
+    _led_flash.final_color = final_color;
+    for (uint8_t i = 0; i < n; i++) _led_flash.steps[i] = steps[i];
+    leds[0] = steps[0].color;
+    FastLED.show();
+}
+
+static void led_flash_tick() {
+    if (!_led_flash.active) return;
+    unsigned long now = millis();
+    while (_led_flash.step < _led_flash.n_steps) {
+        if (now - _led_flash.at < _led_flash.steps[_led_flash.step].dur_ms) return;
+        _led_flash.at += _led_flash.steps[_led_flash.step].dur_ms;
+        _led_flash.step++;
+        if (_led_flash.step < _led_flash.n_steps) {
+            leds[0] = _led_flash.steps[_led_flash.step].color;
+            FastLED.show();
+        }
+    }
+    if (_led_flash.step >= _led_flash.n_steps) {
+        _led_flash.active = false;
+        leds[0] = _led_flash.final_color;
+        FastLED.show();
+    }
+}
+
 #endif // AB7_BUILD
 
 /// True once the device has connected to WiFi and UDP is ready for OSC.
@@ -238,6 +312,7 @@ void setup() {
 
                 // ── Averaged-tare accumulation ────────────────────────
                 if (tare_avg_target > 0) {
+                    xSemaphoreTake(tare_mutex(), portMAX_DELAY);
                     tare_avg_qi += qi; tare_avg_qj += qj;
                     tare_avg_qk += qk; tare_avg_qr += qr;
                     if (++tare_avg_count >= tare_avg_target) {
@@ -251,6 +326,7 @@ void setup() {
                         tare_avg_target = 0;
                         apply_tare_reference();
                     }
+                    xSemaphoreGive(tare_mutex());
                 }
 
                 // Apply tare: compute orientation relative to reference pose.
@@ -392,7 +468,10 @@ void setup() {
                 data_streams[GACCELX]      = constrain((gax / g_accel_scale) * 0.5f + 0.5f, 0.0f, 1.0f);
                 data_streams[GACCELY]      = constrain((gay / g_accel_scale) * 0.5f + 0.5f, 0.0f, 1.0f);
                 data_streams[GACCELZ]      = constrain((gaz / g_accel_scale) * 0.5f + 0.5f, 0.0f, 1.0f);
-                data_streams[GACCELLENGTH] = constrain(accel_len / g_accel_scale, 0.0f, 1.0f);
+                // Use the rotated global-accel vector for GACCELLENGTH, not accel_len.
+                // Rotation is isometric so the values are equal, but this is correct by inspection.
+                float gaccel_len = sqrtf(gax*gax + gay*gay + gaz*gaz);
+                data_streams[GACCELLENGTH] = constrain(gaccel_len / g_accel_scale, 0.0f, 1.0f);
 
                 // ── Swing-twist frame acceleration ────────────────────
                 // Project global-frame accel onto arm coordinate frame:
@@ -450,10 +529,16 @@ void setup() {
                 ot.update(qi, qj, qk, qr, gyro_len);
 
                 // ── Ori-watch: push active-ori changes to status config ──
-                if (ot.ori_watch_enabled) {
+                // Read ori_watch_enabled and active_ori_name under the mutex because
+                // main-task ori commands (/ori/clear, /ori/delete) can mutate them.
+                // The OSC send itself is done outside the lock to avoid stalling update().
+                ot.lock();
+                bool  _watch_enabled = ot.ori_watch_enabled;
+                String cur            = ot.active_ori_name;
+                ot.unlock();
+                if (_watch_enabled) {
                     static String _watch_prev;
                     static unsigned long _watch_ms = 0;
-                    String cur = ot.active_ori_name;
                     unsigned long now_w = millis();
                     if (cur != _watch_prev && now_w - _watch_ms >= 100) {
                         _watch_ms   = now_w;
@@ -489,12 +574,15 @@ void setup() {
                 Serial.print(F("  gX:"));
                 Serial.print((float)data_streams[GYROX], 3);
                 Serial.print(F("  eX:"));
-                Serial.println((float)data_streams[ROLL], 3);
+                Serial.print((float)data_streams[ROLL], 3);
+                Serial.print(F("  stack_free:"));
+                Serial.print(uxTaskGetStackHighWaterMark(nullptr));
+                Serial.println(F("B"));
             }
 
             vTaskDelay(pdMS_TO_TICKS(10));  // ~100 Hz update rate
         }
-    }, "sensor_task", 16384, nullptr, 1, nullptr, 1);  // 16 KB — BNO085 driver  |  pinned to core 1
+    }, "sensor_task", 16384, nullptr, 2, nullptr, 1);  // 16 KB stack (verified HWM); prio 2 > scene tasks; core 1
 
     Serial.println(F("[BOOT] Sensor task started (BNO085 real data)."));
 #else
@@ -530,6 +618,7 @@ void setup() {
 
                 // ── Averaged-tare accumulation ────────────────────────
                 if (tare_avg_target > 0) {
+                    xSemaphoreTake(tare_mutex(), portMAX_DELAY);
                     tare_avg_qi += qi; tare_avg_qj += qj;
                     tare_avg_qk += qk; tare_avg_qr += qr;
                     if (++tare_avg_count >= tare_avg_target) {
@@ -543,6 +632,7 @@ void setup() {
                         tare_avg_target = 0;
                         apply_tare_reference();
                     }
+                    xSemaphoreGive(tare_mutex());
                 }
 
                 // Apply tare: compute orientation relative to reference pose.
@@ -684,7 +774,10 @@ void setup() {
                 data_streams[GACCELX]      = constrain((gax / g_accel_scale) * 0.5f + 0.5f, 0.0f, 1.0f);
                 data_streams[GACCELY]      = constrain((gay / g_accel_scale) * 0.5f + 0.5f, 0.0f, 1.0f);
                 data_streams[GACCELZ]      = constrain((gaz / g_accel_scale) * 0.5f + 0.5f, 0.0f, 1.0f);
-                data_streams[GACCELLENGTH] = constrain(accel_len / g_accel_scale, 0.0f, 1.0f);
+                // Use the rotated global-accel vector for GACCELLENGTH, not accel_len.
+                // Rotation is isometric so the values are equal, but this is correct by inspection.
+                float gaccel_len = sqrtf(gax*gax + gay*gay + gaz*gaz);
+                data_streams[GACCELLENGTH] = constrain(gaccel_len / g_accel_scale, 0.0f, 1.0f);
 
                 // ── Swing-twist frame acceleration ────────────────────
                 // Project global-frame accel onto arm coordinate frame:
@@ -739,10 +832,16 @@ void setup() {
                 ot.update(qi, qj, qk, qr, gyro_len);
 
                 // ── Ori-watch: push active-ori changes to status config ──
-                if (ot.ori_watch_enabled) {
+                // Read ori_watch_enabled and active_ori_name under the mutex because
+                // main-task ori commands (/ori/clear, /ori/delete) can mutate them.
+                // The OSC send itself is done outside the lock to avoid stalling update().
+                ot.lock();
+                bool  _watch_enabled = ot.ori_watch_enabled;
+                String cur            = ot.active_ori_name;
+                ot.unlock();
+                if (_watch_enabled) {
                     static String _watch_prev;
                     static unsigned long _watch_ms = 0;
-                    String cur = ot.active_ori_name;
                     unsigned long now_w = millis();
                     if (cur != _watch_prev && now_w - _watch_ms >= 100) {
                         _watch_ms   = now_w;
@@ -779,12 +878,15 @@ void setup() {
                 Serial.print(F("  gX:"));
                 Serial.print((float)data_streams[GYROX], 3);
                 Serial.print(F("  eX:"));
-                Serial.println((float)data_streams[ROLL], 3);
+                Serial.print((float)data_streams[ROLL], 3);
+                Serial.print(F("  stack_free:"));
+                Serial.print(uxTaskGetStackHighWaterMark(nullptr));
+                Serial.println(F("B"));
             }
 
             vTaskDelay(pdMS_TO_TICKS(10));  // ~100 Hz update rate
         }
-    }, "sensor_task", 16384, nullptr, 1, nullptr);
+    }, "sensor_task", 16384, nullptr, 2, nullptr);  // 16 KB stack (verified HWM); prio 2 > scene tasks
 
     Serial.println(F("[BOOT] Sensor task started (ISM330DHCX + MMC5983MA + BMP5xx via SlimeIMU)."));
 #endif // AB7_BUILD
@@ -836,6 +938,17 @@ void loop() {
 
     OriTracker& ot = ori_tracker();
 
+    // Advance non-blocking LED flash state machine (replaces all delay() calls).
+    led_flash_tick();
+
+    // Predefined flash sequences.
+    static const LedStep _flash_dbl_red[] = {
+        {CRGB(80, 0, 0), 80}, {CRGB(0, 0, 0), 60}, {CRGB(80, 0, 0), 80}};
+    static const LedStep _flash_green[]   = {{CRGB(0, 80, 0), 150}};
+    static const LedStep _flash_white[]   = {{CRGB(100, 100, 100), 120}};
+    static const LedStep _flash_dbl_wht[] = {
+        {CRGB(40, 40, 40), 100}, {CRGB(0, 0, 0), 80}};
+
     // Button A (GPIO 0):
     //   Short tap  (<300 ms): instant single-sample save into the selected ori.
     //   Hold       (≥300 ms): start a timed recording session (LED pulses red);
@@ -855,32 +968,39 @@ void loop() {
         if (btn_a_down && !btn_a_held
             && millis() - btn_a_pressed_at >= BTN_HOLD_MS) {
             btn_a_held = true;
+            ot.lock();
             const SavedOri* sel = ot.selected_ori();
             if (sel) {
-                if (ot.start_recording(sel->name)) {
+                String sel_name = sel->name;  // copy before unlock
+                if (ot.start_recording(sel_name)) {
+                    ot.unlock();
                     Serial.println("[BTN_A] HOLD — recording started for '"
-                                   + sel->name + "'");
+                                   + sel_name + "'");
                     status_reporter().info("ori", "Recording started for '"
-                                          + sel->name + "'");
+                                          + sel_name + "'");
                 } else {
+                    String already = ot.session.name;
+                    ot.unlock();
                     Serial.println("[BTN_A] HOLD — already recording '"
-                                   + ot.session.name + "'");
+                                   + already + "'");
                 }
             } else {
+                ot.unlock();
                 Serial.println(F("[BTN_A] HOLD — no ori selected"));
-                // Double red flash.
-                leds[0] = CRGB(80, 0, 0); FastLED.show(); delay(80);
-                leds[0] = CRGB(0,  0, 0); FastLED.show(); delay(60);
-                leds[0] = CRGB(80, 0, 0); FastLED.show(); delay(80);
-                leds[0] = CRGB(0, 20, 0); FastLED.show();
+                start_led_flash(_flash_dbl_red, 3, CRGB(0, 20, 0));
             }
         }
 
         // ── LED pulse while recording ────────────────────────────────────────
-        if (btn_a_held && ot.session.active) {
-            uint8_t pulse = ((millis() / 150) % 2 == 0) ? 60 : 0;
-            leds[0] = CRGB(pulse, 0, 0);
-            FastLED.show();
+        if (btn_a_held) {
+            ot.lock();
+            bool rec_active = ot.session.active;
+            ot.unlock();
+            if (rec_active) {
+                uint8_t pulse = ((millis() / 150) % 2 == 0) ? 60 : 0;
+                leds[0] = CRGB(pulse, 0, 0);
+                FastLED.show();
+            }
         }
 
         // ── Release ──────────────────────────────────────────────────────────
@@ -891,48 +1011,41 @@ void loop() {
             if (btn_a_held) {
                 // End of hold — finalize recording.
                 btn_a_held = false;
-                if (ot.session.active) {
-                    String rec_name = ot.session.name;
-                    int n = ot.stop_recording();
+                ot.lock();
+                bool was_active = ot.session.active;
+                String rec_name = ot.session.name;
+                int n = was_active ? ot.stop_recording() : 0;
+                bool has_slot   = was_active && (ot.find(rec_name) >= 0);
+                ot.unlock();
+                if (was_active) {
                     Serial.println("[BTN_A] Recording done: '" + rec_name
                                    + "', " + String(n) + " samples");
                     status_reporter().info("ori", "Recorded '" + rec_name
                                          + "' (" + String(n) + " samples)");
-                    int idx = ot.find(rec_name);
-                    if (idx >= 0) {
-                        // Green flash.
-                        leds[0] = CRGB(0, 80, 0);
-                        FastLED.show();
-                        delay(150);
-                        leds[0] = CRGB(0, 0, 0);
-                        FastLED.show();
+                    if (has_slot) {
+                        start_led_flash(_flash_green, 1, CRGB(0, 40, 0));
                     }
                 }
             } else {
                 // Short tap — instant single-sample save.
+                ot.lock();
                 const SavedOri* sel = ot.selected_ori();
                 if (sel) {
-                    int idx = ot.save(sel->name, cur_qi, cur_qj, cur_qk, cur_qr);
+                    String sel_name = sel->name;
+                    int idx = ot.save(sel_name, cur_qi, cur_qj, cur_qk, cur_qr);
+                    uint8_t sc = (idx >= 0) ? ot.oris[idx].sample_count : 0;
+                    ot.unlock();
                     if (idx >= 0) {
-                        uint8_t sc = ot.oris[idx].sample_count;
                         Serial.println("[BTN_A] TAP — saved sample " + String(sc)
-                                       + " to '" + sel->name + "'");
+                                       + " to '" + sel_name + "'");
                         status_reporter().info("ori", "Saved sample to '"
-                                             + sel->name + "' (" + String(sc) + ")");
-                        // White flash.
-                        leds[0] = CRGB(100, 100, 100);
-                        FastLED.show();
-                        delay(120);
-                        leds[0] = CRGB(0, 0, 0);
-                        FastLED.show();
+                                             + sel_name + "' (" + String(sc) + ")");
+                        start_led_flash(_flash_white, 1, CRGB(0, 40, 0));
                     }
                 } else {
+                    ot.unlock();
                     Serial.println(F("[BTN_A] TAP — no ori selected"));
-                    // Double red flash.
-                    leds[0] = CRGB(80, 0, 0); FastLED.show(); delay(80);
-                    leds[0] = CRGB(0,  0, 0); FastLED.show(); delay(60);
-                    leds[0] = CRGB(80, 0, 0); FastLED.show(); delay(80);
-                    leds[0] = CRGB(0, 20, 0); FastLED.show();
+                    start_led_flash(_flash_dbl_red, 3, CRGB(0, 20, 0));
                 }
             }
         }
@@ -944,30 +1057,28 @@ void loop() {
     //   • Sampled slots: LED shows the color steadily (dimmed).
     if (digitalRead(BTN_B) == LOW && millis() - btn_b_last > BTN_DEBOUNCE_MS) {
         btn_b_last = millis();
+        ot.lock();
         int idx = ot.select_next();
         if (idx >= 0) {
-            const SavedOri& o = ot.oris[idx];
-            if (o.sample_count == 0) {
-                Serial.println("[BTN_B] Selected PENDING ori: '" + o.name
+            String ori_name    = ot.oris[idx].name;
+            uint8_t sample_cnt = ot.oris[idx].sample_count;
+            ot.unlock();
+            if (sample_cnt == 0) {
+                Serial.println("[BTN_B] Selected PENDING ori: '" + ori_name
                     + "' (pre-registered, not yet sampled) — press A to capture");
-                // Double-blink: signals "needs sampling".
-                leds[0] = CRGB(40, 40, 40); FastLED.show(); delay(100);
-                leds[0] = CRGB(0, 0, 0);    FastLED.show(); delay(80);
-                leds[0] = CRGB(40, 40, 40); FastLED.show();
+                // Double-blink: signals "needs sampling"; final color = steady white.
+                start_led_flash(_flash_dbl_wht, 2, CRGB(40, 40, 40));
             } else {
-                Serial.println("[BTN_B] Selected ori: '" + o.name
-                    + "' (" + String(o.sample_count) + " samples)");
+                Serial.println("[BTN_B] Selected ori: '" + ori_name
+                    + "' (" + String(sample_cnt) + " samples)");
                 // Steady dim white.
                 leds[0] = CRGB(40, 40, 40);
                 FastLED.show();
             }
         } else {
+            ot.unlock();
             Serial.println(F("[BTN_B] No oris. Register oris via Gooey first."));
-            // Double red flash.
-            leds[0] = CRGB(80, 0, 0); FastLED.show(); delay(80);
-            leds[0] = CRGB(0,  0, 0); FastLED.show(); delay(60);
-            leds[0] = CRGB(80, 0, 0); FastLED.show(); delay(80);
-            leds[0] = CRGB(0, 20, 0); FastLED.show();
+            start_led_flash(_flash_dbl_red, 3, CRGB(0, 20, 0));
         }
     }
 #endif // AB7_BUILD

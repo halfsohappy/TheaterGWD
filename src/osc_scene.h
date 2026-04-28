@@ -111,6 +111,9 @@ class OscScene {
 public:
     ExistFlags     exist;
     String         name;
+    // Pre-lowercased/trimmed key used by find_scene() to avoid per-element
+    // String allocations inside the lookup loop.
+    String         name_key;
 
     // Network destination (used as fallback or override for child messages).
     IPAddress      ip;
@@ -156,7 +159,8 @@ public:
         : ip(0, 0, 0, 0), port(0) {}
 
     explicit OscScene(const String& set_name)
-        : name(set_name), ip(0, 0, 0, 0), port(0)
+        : name(set_name), name_key(osc_lower_copy(osc_trim_copy(set_name))),
+          ip(0, 0, 0, 0), port(0)
     {
         exist.name = true;
     }
@@ -166,6 +170,7 @@ public:
         : ip(msg.ip), port(msg.port), osc_address(msg.osc_address)
     {
         name       = msg.name;
+        name_key   = msg.name_key;
         exist.name = msg.exist.name;
         exist.ip   = msg.exist.ip;
         exist.port = msg.exist.port;

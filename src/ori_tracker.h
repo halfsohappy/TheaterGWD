@@ -216,6 +216,21 @@ struct RecordingSession {
 
 class OriTracker {
 public:
+    // --- Mutex — guards all mutable state accessed from multiple tasks -------
+    //
+    // update()  is called from the sensor FreeRTOS task.
+    // All other public methods (save, reset, remove, register_ori,
+    // start_recording, stop_recording, cancel_recording, clear) are called
+    // from the main-loop OSC command handler.  Both contexts can be active
+    // concurrently, so every mutation must hold _mutex.
+    SemaphoreHandle_t _mutex = nullptr;
+
+    void ensure_mutex() {
+        if (!_mutex) _mutex = xSemaphoreCreateMutex();
+    }
+    void lock()   { ensure_mutex(); xSemaphoreTake(_mutex, portMAX_DELAY); }
+    void unlock() { xSemaphoreGive(_mutex); }
+
     // --- Global configuration -----------------------------------------------
 
     /// Gyroscope magnitude threshold (rad/s).  Matching freezes above this.
@@ -490,6 +505,13 @@ public:
     // === Main update — call every sensor cycle ==============================
 
     void update(float qi, float qj, float qk, float qr, float gyro_mag) {
+        lock();
+        _update_locked(qi, qj, qk, qr, gyro_mag);
+        unlock();
+    }
+
+private:
+    void _update_locked(float qi, float qj, float qk, float qr, float gyro_mag) {
         // Feed sample into an active recording session.
         if (session.active) session.push(qi, qj, qk, qr);
 
@@ -577,6 +599,7 @@ public:
         active_ori_name  = (best_idx >= 0) ? oris[best_idx].name : "";
     }
 
+public:
     // === On-device button helpers ============================================
 
     int select_next() {

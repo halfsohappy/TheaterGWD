@@ -121,11 +121,13 @@
 extern String device_adr;
 
 // Forward-declare the current quaternion globals (defined in main.cpp).
-extern float cur_qi, cur_qj, cur_qk, cur_qr;
+// volatile: written by sensor task, read by main-loop tare commands.
+extern volatile float cur_qi, cur_qj, cur_qk, cur_qr;
 
 // Forward-declare the tare globals (defined in main.cpp).
-extern float tare_qi, tare_qj, tare_qk, tare_qr;
-extern bool  tare_active;
+// volatile: written by both the sensor task (averaged-tare) and OSC tare commands.
+extern volatile float tare_qi, tare_qj, tare_qk, tare_qr;
+extern volatile bool  tare_active;
 
 // Forward-declare the Euler decomposition selector (defined in main.cpp).
 // 0 = ZYX (default, singular on Y), 1 = ZXY (singular on X).
@@ -138,8 +140,9 @@ extern float twist_nx, twist_ny, twist_nz;
 extern float tare_up_x, tare_up_y, tare_up_z;
 
 // Averaged-tare accumulation state (defined in main.cpp).
-extern int   tare_avg_target, tare_avg_count;
-extern float tare_avg_qi, tare_avg_qj, tare_avg_qk, tare_avg_qr;
+// volatile: accumulated by the sensor task, reset by tare OSC commands.
+extern volatile int   tare_avg_target, tare_avg_count;
+extern volatile float tare_avg_qi, tare_avg_qj, tare_avg_qk, tare_avg_qr;
 
 // Runtime sensor scale factors (defined in main.cpp).
 extern float g_accel_scale, g_gyro_scale;
@@ -147,6 +150,15 @@ extern float g_accel_scale, g_gyro_scale;
 // Swing-twist per-axis zero offsets and last-computed values (defined in main.cpp).
 extern float twist_offset_deg, azi_offset_deg, tilt_offset_deg;
 extern float last_twist_deg, last_azi_deg, last_tilt_deg;
+
+// ---------------------------------------------------------------------------
+// tare_mutex — serialises tare-state mutations across the sensor task and the
+// main OSC command handler.  Meyer's singleton so it is never unitialised.
+// ---------------------------------------------------------------------------
+static inline SemaphoreHandle_t& tare_mutex() {
+    static SemaphoreHandle_t _m = xSemaphoreCreateMutex();
+    return _m;
+}
 
 // ---------------------------------------------------------------------------
 // apply_tare_reference — compute euler_order and swing-twist axes from tare_q*
@@ -267,10 +279,12 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
     //    /tare/status   — report whether a tare is currently active
 
     if (norm_adr == "/tare") {
+        xSemaphoreTake(tare_mutex(), portMAX_DELAY);
         tare_qi = cur_qi; tare_qj = cur_qj; tare_qk = cur_qk; tare_qr = cur_qr;
         tare_active = true;
         tare_avg_target = 0;  // cancel any in-progress avg-tare
         apply_tare_reference();
+        xSemaphoreGive(tare_mutex());
         const char* order_name = (euler_order == 1) ? "ZXY" : "ZYX";
         osc_reply(sender_ip, sender_port, reply_adr,
                   String("TARE SET (") + order_name + ")");
@@ -281,9 +295,11 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
     if (norm_adr == "/tare/avg") {
         // Accumulate N frames and average before applying tare.
         int n = (int)constrain((float)osc_msg.nextAsInt(), 1.0f, 200.0f);
+        xSemaphoreTake(tare_mutex(), portMAX_DELAY);
         tare_avg_target = n;
         tare_avg_count  = 0;
         tare_avg_qi = tare_avg_qj = tare_avg_qk = tare_avg_qr = 0.0f;
+        xSemaphoreGive(tare_mutex());
         osc_reply(sender_ip, sender_port, reply_adr,
                   String("TARE AVG START (") + n + " frames) — hold still");
         status_reporter().info("tare", String("Averaged tare started — collecting ") + n + " frames");
@@ -346,6 +362,7 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
     }
 
     if (norm_adr == "/tare/reset") {
+        xSemaphoreTake(tare_mutex(), portMAX_DELAY);
         tare_qi = 0.0f; tare_qj = 0.0f; tare_qk = 0.0f; tare_qr = 1.0f;
         tare_active = false;
         tare_avg_target = 0;
@@ -353,6 +370,7 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
         twist_nx = 1.0f; twist_ny = 0.0f; twist_nz = 0.0f;
         tare_up_x = 0.0f; tare_up_y = 0.0f; tare_up_z = 1.0f;
         twist_offset_deg = azi_offset_deg = tilt_offset_deg = 0.0f;
+        xSemaphoreGive(tare_mutex());
         osc_reply(sender_ip, sender_port, reply_adr, "TARE RESET");
         status_reporter().info("tare", "Tare cleared — decomposition: ZYX");
         return;
@@ -819,7 +837,9 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
                 return;
             }
 
+            ot.lock();
             int idx = ot.register_ori(ori_name);
+            ot.unlock();
             if (idx >= 0) {
                 status_reporter().info("ori", "Registered ori '" + ori_name + "' (slot " + String(idx) + ")");
                 osc_reply(sender_ip, sender_port, reply_adr + "/ori/register", "Registered: " + ori_name);
@@ -848,12 +868,14 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
             }
 
             int idx;
+            ot.lock();
             if (ori_name.length() > 0) {
                 idx = ot.save(ori_name, cur_qi, cur_qj, cur_qk, cur_qr);
             } else {
                 idx = ot.save_auto(cur_qi, cur_qj, cur_qk, cur_qr);
                 if (idx >= 0) ori_name = ot.oris[idx].name;
             }
+            ot.unlock();
 
             if (idx >= 0) {
                 status_reporter().info("ori", "Saved ori '" + ori_name + "' (idx " + String(idx) + ")");
@@ -881,7 +903,10 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
                 status_reporter().warning("ori", "delete: no name given");
                 return;
             }
-            if (ot.remove(ori_name)) {
+            ot.lock();
+            bool deleted = ot.remove(ori_name);
+            ot.unlock();
+            if (deleted) {
                 status_reporter().info("ori", "Deleted ori '" + ori_name + "'");
                 osc_reply(sender_ip, sender_port, reply_adr + "/ori/delete", "Deleted: " + ori_name);
             } else {
@@ -892,7 +917,9 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
 
         // /ori/clear
         if (ori_rest == "/clear") {
+            ot.lock();
             ot.clear();
+            ot.unlock();
             status_reporter().info("ori", "All oris cleared");
             osc_reply(sender_ip, sender_port, reply_adr + "/ori/clear", "All oris cleared");
             return;
@@ -900,7 +927,9 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
 
         // /ori/list
         if (ori_rest == "/list") {
+            ot.lock();
             String listing = ot.list();
+            ot.unlock();
             status_reporter().info("ori", "Saved oris: " + listing);
             osc_reply(sender_ip, sender_port, reply_adr + "/ori/list", listing);
             return;
@@ -975,7 +1004,9 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
                 status_reporter().warning("ori", "reset: no name given");
                 return;
             }
+            ot.lock();
             int idx = ot.reset(ori_name);
+            ot.unlock();
             if (idx >= 0) {
                 status_reporter().info("ori", "Cleared samples for ori '" + ori_name + "' (ready to re-record)");
                 osc_reply(sender_ip, sender_port, reply_adr + "/ori/reset", "Reset: " + ori_name);
@@ -1142,21 +1173,27 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
                               "ERROR: no name given");
                     return;
                 }
-                if (ot.start_recording(ori_name)) {
+                ot.lock();
+                bool rec_started = ot.start_recording(ori_name);
+                String already_rec = rec_started ? String("") : ot.session.name;
+                ot.unlock();
+                if (rec_started) {
                     status_reporter().info("ori", "Recording started for '" + ori_name + "'");
                     osc_reply(sender_ip, sender_port, reply_adr + "/ori/record/start",
                               "Recording: " + ori_name);
                 } else {
                     status_reporter().warning("ori", "Recording already active for '"
-                                             + ot.session.name + "'");
+                                             + already_rec + "'");
                     osc_reply(sender_ip, sender_port, reply_adr + "/ori/record/start",
-                              "ERROR: already recording '" + ot.session.name + "'");
+                              "ERROR: already recording '" + already_rec + "'");
                 }
                 return;
             }
 
             if (rec_sub == "/stop") {
+                ot.lock();
                 if (!ot.session.active) {
+                    ot.unlock();
                     osc_reply(sender_ip, sender_port, reply_adr + "/ori/record/stop",
                               "ERROR: no active recording");
                     return;
@@ -1177,18 +1214,22 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
                         result += ", mode: fullQ";
                     }
                 }
+                ot.unlock();
                 status_reporter().info("ori", result);
                 osc_reply(sender_ip, sender_port, reply_adr + "/ori/record/stop", result);
                 return;
             }
 
             if (rec_sub == "/cancel") {
+                ot.lock();
                 if (!ot.session.active) {
+                    ot.unlock();
                     osc_reply(sender_ip, sender_port, reply_adr + "/ori/record/cancel",
                               "No active recording");
                 } else {
                     String cancelled = ot.session.name;
                     ot.cancel_recording();
+                    ot.unlock();
                     status_reporter().info("ori", "Recording cancelled for '" + cancelled + "'");
                     osc_reply(sender_ip, sender_port, reply_adr + "/ori/record/cancel",
                               "Cancelled: " + cancelled);
@@ -1521,7 +1562,8 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
                 return;
             }
             *dest = *src;
-            dest->name = dest_name;
+            dest->name     = dest_name;
+            dest->name_key = osc_lower_copy(osc_trim_copy(dest_name));
             dest->exist.name = true;
             status_reporter().info("cmd", "Cloned msg '" + src_name + "' → '" + dest_name + "'");
         } else {
@@ -1548,6 +1590,7 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
             dest->exist          = src->exist;
             dest->exist.name     = true;
             dest->name           = dest_name;
+            dest->name_key       = osc_lower_copy(osc_trim_copy(dest_name));
             dest->msg_count      = src->msg_count;
             memcpy(dest->msg_indices, src->msg_indices,
                    src->msg_count * sizeof(int));
@@ -1583,7 +1626,8 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
             if (!m) {
                 status_reporter().error("cmd", "msg/rename: '" + old_name + "' not found");
             } else {
-                m->name = new_name;
+                m->name     = new_name;
+                m->name_key = osc_lower_copy(osc_trim_copy(new_name));
                 status_reporter().info("cmd", "Renamed msg '" + old_name + "' → '" + new_name + "'");
             }
         } else {
@@ -1591,7 +1635,8 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
             if (!p) {
                 status_reporter().error("cmd", "scene/rename: '" + old_name + "' not found");
             } else {
-                p->name = new_name;
+                p->name     = new_name;
+                p->name_key = osc_lower_copy(osc_trim_copy(new_name));
                 status_reporter().info("cmd", "Renamed scene '" + old_name + "' → '" + new_name + "'");
             }
         }
@@ -2130,7 +2175,8 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
                 if (csv.from_config_str(cfg_str, &err)) {
                     // Merge: new config takes priority.
                     OscMessage merged = csv * m;
-                    merged.name = m.name;
+                    merged.name     = m.name;
+                    merged.name_key = m.name_key;
                     merged.exist.name = true;
                     m = merged;
                     applied++;
@@ -2241,7 +2287,8 @@ void osc_handle_message(MicroOscMessage& osc_msg) {
                 }
                 // Merge: new config values take priority.
                 *m = csv * (*m);
-                m->name = name_mp;
+                m->name     = name_mp;
+                m->name_key = osc_lower_copy(osc_trim_copy(name_mp));
                 m->exist.name = true;
 
                 // If scenes were specified, auto-add to those scenes.
