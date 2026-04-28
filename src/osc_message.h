@@ -72,6 +72,9 @@ public:
     ExistFlags    exist;
 
     String        name;
+    // Pre-lowercased/trimmed key used by find_msg() / find_scene() to avoid
+    // per-element String allocations inside the lookup loop.
+    String        name_key;
 
     // Network destination (can be overridden by parent scene).
     IPAddress     ip;
@@ -170,7 +173,8 @@ public:
         : ip(0, 0, 0, 0), port(0), value_ptr(nullptr) {}
 
     explicit OscMessage(const String& set_name)
-        : name(set_name), ip(0, 0, 0, 0), port(0), value_ptr(nullptr)
+        : name(set_name), name_key(osc_lower_copy(osc_trim_copy(set_name))),
+          ip(0, 0, 0, 0), port(0), value_ptr(nullptr)
     {
         exist.name = true;
     }
@@ -179,6 +183,7 @@ public:
     OscMessage(const OscMessage& o) {
         exist      = o.exist;
         name       = o.name;
+        name_key   = o.name_key;
         ip         = o.ip;
         port       = o.port;
         osc_address = o.osc_address;
@@ -198,6 +203,7 @@ public:
         if (this != &o) {
             exist      = o.exist;
             name       = o.name;
+            name_key   = o.name_key;
             ip         = o.ip;
             port       = o.port;
             osc_address = o.osc_address;

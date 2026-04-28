@@ -501,7 +501,9 @@ static inline int _nvs_load_combined(const String& ns) {
         OscMessage parsed; String err;
         if (parsed.from_config_str(saved, &err)) {
             *m = parsed * (*m);
-            m->name = mname; m->exist.name = true;
+            m->name     = mname;
+            m->name_key = osc_lower_copy(osc_trim_copy(mname));
+            m->exist.name = true;
         }
         int en_idx = saved.indexOf("enabled:");
         if (en_idx >= 0) {

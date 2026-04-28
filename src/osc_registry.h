@@ -56,7 +56,7 @@ public:
     OscScene* find_scene(const String& n) {
         String key = osc_lower_copy(osc_trim_copy(n));
         for (uint16_t i = 0; i < scene_count; i++) {
-            if (osc_lower_copy(osc_trim_copy(scenes[i].name)) == key)
+            if (scenes[i].name_key == key)
                 return &scenes[i];
         }
         return nullptr;
@@ -65,7 +65,7 @@ public:
     OscMessage* find_msg(const String& n) {
         String key = osc_lower_copy(osc_trim_copy(n));
         for (uint16_t i = 0; i < msg_count; i++) {
-            if (osc_lower_copy(osc_trim_copy(messages[i].name)) == key)
+            if (messages[i].name_key == key)
                 return &messages[i];
         }
         return nullptr;

@@ -48,8 +48,8 @@
 // Global transport objects
 // ---------------------------------------------------------------------------
 
-WiFiUDP        Udp;                    // shared UDP socket
-MicroOscUdp<1024> osc(&Udp);          // OSC codec (1024-byte receive buffer)
+static WiFiUDP        Udp;                    // shared UDP socket
+static MicroOscUdp<1024> osc(&Udp);          // OSC codec (1024-byte receive buffer)
 
 // ---------------------------------------------------------------------------
 // Send mutex — serialises all outbound UDP writes across FreeRTOS tasks
@@ -452,34 +452,59 @@ static inline void start_scene(OscScene* p) {
 static inline void stop_scene(OscScene* p) {
     if (!p) return;
     p->enabled = false;
-    if (p->task_handle) {
-        vTaskDelete(p->task_handle);
-        p->task_handle = nullptr;
-    }
+    // Capture and clear the handle before deleting so the task cannot be
+    // double-deleted and the NULL handle is visible to other tasks immediately.
+    TaskHandle_t h = p->task_handle;
+    p->task_handle = nullptr;
+    if (h) vTaskDelete(h);
     status_reporter().info("scene", "Stopped scene '" + p->name + "'");
 }
 
 /// Stop all scene tasks (theater "blackout").
+/// Collects task handles under the registry lock, unlocks, then deletes — this
+/// avoids calling vTaskDelete() while holding the registry mutex, which could
+/// block if a scene task holds it and cannot release it after deletion.
 static inline void blackout_all() {
     OscRegistry& reg = osc_registry();
+
+    // Collect handles and disable scenes under the lock.
+    TaskHandle_t handles[MAX_OSC_SCENES] = {};
     reg.lock();
     for (uint16_t i = 0; i < reg.scene_count; i++) {
-        stop_scene(&reg.scenes[i]);
+        handles[i]                = reg.scenes[i].task_handle;
+        reg.scenes[i].task_handle = nullptr;
+        reg.scenes[i].enabled     = false;
     }
     reg.unlock();
+
+    // Delete tasks outside the lock.
+    for (uint16_t i = 0; i < MAX_OSC_SCENES && handles[i]; i++) {
+        vTaskDelete(handles[i]);
+    }
     status_reporter().info("engine", "BLACKOUT — all scenes stopped");
 }
 
 /// Re-enable and start all scenes that have at least one message.
+/// Collects the set of scenes to start under the lock, then starts tasks
+/// outside it to avoid holding the registry mutex during xTaskCreate.
 static inline void restore_all() {
     OscRegistry& reg = osc_registry();
+
+    // Collect scenes that need restarting under the lock.
+    OscScene* to_start[MAX_OSC_SCENES] = {};
+    uint16_t  n_start = 0;
     reg.lock();
     for (uint16_t i = 0; i < reg.scene_count; i++) {
         if (reg.scenes[i].msg_count > 0) {
-            start_scene(&reg.scenes[i]);
+            to_start[n_start++] = &reg.scenes[i];
         }
     }
     reg.unlock();
+
+    // Start tasks outside the lock.
+    for (uint16_t i = 0; i < n_start; i++) {
+        start_scene(to_start[i]);
+    }
     status_reporter().info("engine", "RESTORE — all scenes restarted");
 }
 
@@ -489,12 +514,23 @@ static inline void restore_all() {
 
 /// Connect to WiFi and start the UDP listener on `start_port`.
 /// Called once during setup() after provisioning.
+/// Issues 8 & 12 mitigations:
+///   — Derives a /24 gateway from the static IP rather than leaving it unset.
+///   — Only clears provisioning credentials after 3 consecutive WiFi
+///     timeouts (NVS key "wifi_fail_ct").  A single bad signal situation
+///     no longer wipes the device config.
+///   — Signals the failure on the AB7 LED (red for 2 s) before restarting.
 static inline void begin_udp(const String& start_ip, const String& start_ssid,
                               const String& start_pass, int start_port) {
     IPAddress static_ip;
     if (start_ip != "dhcp") {
         static_ip.fromString(start_ip);
-        WiFi.config(static_ip);
+        // Derive a sensible default gateway: same /24 subnet, host .1.
+        // This covers the vast majority of home/studio router setups.
+        // TODO: persist gateway/subnet in the provisioning form for full control.
+        IPAddress gw(static_ip[0], static_ip[1], static_ip[2], 1);
+        IPAddress sn(255, 255, 255, 0);
+        WiFi.config(static_ip, gw, sn);
     }
 
     WiFi.begin(start_ssid.c_str(), start_pass.c_str());
@@ -506,18 +542,40 @@ static inline void begin_udp(const String& start_ip, const String& start_ssid,
         Serial.print(".");
         if (millis() - startTime >= WIFI_CONNECT_TIMEOUT_MS) {
             Serial.println();
-            Serial.println(F("[BOOT] WiFi connection timed out. Clearing credentials and restarting..."));
-            // Clear provisioned flag so the device re-enters provisioning mode.
-            // Guard against begin() failure (e.g. corrupted NVS): if begin fails,
-            // getBool("provisioned") will also fail and return the default (false),
-            // so provisioning will start correctly on the next boot anyway.
+            Serial.println(F("[BOOT] WiFi connection timed out."));
+
+#ifdef AB7_BUILD
+            // Signal failure on the LED before restarting.
+            // Function defined in main.cpp (AB7 builds only).
+            void wifi_timeout_led_signal();
+            wifi_timeout_led_signal();
+#endif
+
+            // Only wipe credentials after 3 consecutive failures so a
+            // momentary signal drop does not force re-provisioning.
             if (preferences.begin("device_config", false)) {
-                preferences.putBool("provisioned", false);
+                int fail_count = preferences.getInt("wifi_fail_ct", 0) + 1;
+                Serial.print(F("[BOOT] Consecutive WiFi failures: "));
+                Serial.println(fail_count);
+                if (fail_count >= 3) {
+                    Serial.println(F("[BOOT] 3 failures — clearing credentials, re-entering provisioning."));
+                    preferences.putBool("provisioned", false);
+                    preferences.putInt("wifi_fail_ct", 0);
+                } else {
+                    preferences.putInt("wifi_fail_ct", fail_count);
+                }
                 preferences.end();
             }
             ESP.restart();
         }
     }
+
+    // WiFi connected — reset the failure counter.
+    if (preferences.begin("device_config", false)) {
+        preferences.putInt("wifi_fail_ct", 0);
+        preferences.end();
+    }
+
     Serial.println();
     Serial.println("WiFi connected — IP: " + WiFi.localIP().toString());
 

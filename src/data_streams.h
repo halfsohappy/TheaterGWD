@@ -69,9 +69,16 @@
 // Elements 25–28 (LIMB_FWD/LAT/VERT + TWITCH) are swing-twist frame accelerations.
 // Elements 29–31 (TWIST_VEL/AZI_VEL/TILT_VEL) are finite-difference angular velocities
 // of the swing-twist angles, scaled to [0,1] with ±360 deg/s → [0,1] (0.5 = stationary).
-// Declared volatile because the sensor task (writer) and scene send tasks
-// (readers) run concurrently without a mutex protecting individual element access.
-volatile float data_streams[NUM_DATA_STREAMS];
+//
+// Thread-safety contract: written exclusively by the sensor task, read by
+// scene send tasks.  Each element is a 32-bit IEEE float at 4-byte alignment.
+// On Xtensa LX7, aligned 32-bit stores/loads are single-cycle atomic.
+// volatile prevents compiler register-caching across task preemption.
+// A full double-buffer is not required for float scalars, but callers must
+// not assume cross-element atomicity within a single sensor frame.
+//
+// Definition lives in main.cpp; this is the extern declaration.
+extern volatile float data_streams[NUM_DATA_STREAMS];
 
 // ---------------------------------------------------------------------------
 // Helpers
