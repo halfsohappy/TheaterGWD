@@ -11,16 +11,16 @@
 
 // ==== DMX Universe State ====================================================
 
-static uint8_t  dmx_values[DMX_PACKET_SIZE];   // intended channel values
-static uint8_t  dmx_blank[DMX_PACKET_SIZE];    // all-zero frame for blackout
+static uint8_t  dmx_values[MDMX_PACKET_SIZE];   // intended channel values
+static uint8_t  dmx_blank[MDMX_PACKET_SIZE];    // all-zero frame for blackout
 static bool     dmx_blackout = false;           // blackout flag
 static const dmx_port_t DMX_PORT = DMX_NUM_1;   // UART1
 
 // ==== Init ==================================================================
 
 inline void dmx_init() {
-    memset(dmx_values, 0, DMX_PACKET_SIZE);
-    memset(dmx_blank,  0, DMX_PACKET_SIZE);
+    memset(dmx_values, 0, MDMX_PACKET_SIZE);
+    memset(dmx_blank,  0, MDMX_PACKET_SIZE);
 
     dmx_config_t config = DMX_CONFIG_DEFAULT;
     dmx_personality_t personalities[] = {};
@@ -57,14 +57,18 @@ inline bool dmx_is_blackout() {
 
 // ==== Transmit ==============================================================
 // Call this periodically (e.g. every ~25 ms for 40 fps DMX refresh).
+// Uses dmx_send_num (esp_dmx v4.1) which blocks until the driver is idle,
+// then dmx_wait_sent to ensure the frame is fully on the wire before the
+// buffer is touched again on the next iteration.
 
 inline void dmx_transmit() {
     if (dmx_blackout) {
-        dmx_write(DMX_PORT, dmx_blank, DMX_PACKET_SIZE);
+        dmx_write(DMX_PORT, dmx_blank, MDMX_PACKET_SIZE);
     } else {
-        dmx_write(DMX_PORT, dmx_values, DMX_PACKET_SIZE);
+        dmx_write(DMX_PORT, dmx_values, MDMX_PACKET_SIZE);
     }
-    dmx_send(DMX_PORT, DMX_PACKET_SIZE);
+    dmx_send_num(DMX_PORT, MDMX_PACKET_SIZE);
+    dmx_wait_sent(DMX_PORT, pdMS_TO_TICKS(100));
 }
 
 #endif // BC127_DMX_ENGINE_H

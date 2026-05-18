@@ -9,6 +9,11 @@
 //   1. OSC Feed   — scrolling log of recent OSC messages
 //   2. DMX Monitor — grid of all 64 active channels with live values
 //
+// Uses an M5GFX sprite as a back-buffer (double-buffering) so the entire
+// frame is composed off-screen and pushed to the LCD in one
+// DMA transfer.  This eliminates the visible flicker that occurred when
+// fillRect / print calls went directly to the panel.
+//
 // =============================================================================
 
 #include <M5Unified.h>
@@ -37,41 +42,46 @@ static const uint16_t COL_ALERT    = 0xF800;  // red (blackout indicator)
 static const uint16_t COL_GREEN    = 0x07E0;  // green
 static const uint16_t COL_CELL_BG  = 0x18E3;  // dark grey cell background
 
+// ==== Sprite (back-buffer) ==================================================
+
+static M5Canvas sprite(&M5.Display);
+
 // ==== Init ==================================================================
 
 inline void display_init() {
-    M5.Display.fillScreen(COL_BG);
-    M5.Display.setTextColor(COL_TEXT, COL_BG);
-    M5.Display.setTextSize(1);
+    sprite.createSprite(DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    sprite.setColorDepth(16);
+    sprite.fillSprite(COL_BG);
+    sprite.pushSprite(0, 0);
 }
 
 // ==== Header Bar ============================================================
 
 static void draw_header() {
-    M5.Display.fillRect(0, 0, DISPLAY_WIDTH, 20, COL_HEADER);
-    M5.Display.setTextColor(TFT_BLACK, COL_HEADER);
-    M5.Display.setTextSize(1);
-    M5.Display.setCursor(4, 4);
-    M5.Display.print("annieData DMX");
+    sprite.fillRect(0, 0, DISPLAY_WIDTH, 20, COL_HEADER);
+    sprite.setTextColor(TFT_BLACK, COL_HEADER);
+    sprite.setTextSize(1);
+    sprite.setCursor(4, 4);
+    sprite.print("annieData DMX");
 
     // Blackout indicator
     if (dmx_is_blackout()) {
-        M5.Display.setTextColor(COL_ALERT, COL_HEADER);
-        M5.Display.setCursor(DISPLAY_WIDTH - 70, 4);
-        M5.Display.print("BLACKOUT");
+        sprite.setTextColor(COL_ALERT, COL_HEADER);
+        sprite.setCursor(DISPLAY_WIDTH - 70, 4);
+        sprite.print("BLACKOUT");
     } else {
-        M5.Display.setTextColor(COL_GREEN, COL_HEADER);
-        M5.Display.setCursor(DISPLAY_WIDTH - 40, 4);
-        M5.Display.print("LIVE");
+        sprite.setTextColor(COL_GREEN, COL_HEADER);
+        sprite.setCursor(DISPLAY_WIDTH - 40, 4);
+        sprite.print("LIVE");
     }
 
     // View label
-    M5.Display.setTextColor(TFT_BLACK, COL_HEADER);
-    M5.Display.setCursor(DISPLAY_WIDTH / 2 - 20, 4);
+    sprite.setTextColor(TFT_BLACK, COL_HEADER);
+    sprite.setCursor(DISPLAY_WIDTH / 2 - 20, 4);
     if (current_view == VIEW_OSC_FEED)
-        M5.Display.print("OSC");
+        sprite.print("OSC");
     else
-        M5.Display.print("DMX");
+        sprite.print("DMX");
 }
 
 // ==== OSC Feed View =========================================================
@@ -82,21 +92,21 @@ static void draw_osc_feed() {
     int max_lines = (DISPLAY_HEIGHT - y) / line_h;
     if (max_lines > osc_log_count) max_lines = osc_log_count;
 
-    M5.Display.fillRect(0, 22, DISPLAY_WIDTH, DISPLAY_HEIGHT - 22, COL_BG);
-    M5.Display.setTextColor(COL_TEXT, COL_BG);
-    M5.Display.setTextSize(1);
+    sprite.fillRect(0, 22, DISPLAY_WIDTH, DISPLAY_HEIGHT - 22, COL_BG);
+    sprite.setTextColor(COL_TEXT, COL_BG);
+    sprite.setTextSize(1);
 
     // Show most recent lines at the bottom
     int first = osc_log_count - max_lines;
     for (int i = 0; i < max_lines; i++) {
         const String& line = osc_log_at(first + i);
-        M5.Display.setCursor(4, y + i * line_h);
+        sprite.setCursor(4, y + i * line_h);
         // Truncate lines that exceed display width
         static constexpr int MAX_DISPLAY_LINE_LEN = 50;
         if ((int)line.length() > MAX_DISPLAY_LINE_LEN) {
-            M5.Display.print(line.substring(0, MAX_DISPLAY_LINE_LEN));
+            sprite.print(line.substring(0, MAX_DISPLAY_LINE_LEN));
         } else {
-            M5.Display.print(line);
+            sprite.print(line);
         }
     }
 }
@@ -105,8 +115,8 @@ static void draw_osc_feed() {
 // Shows the 64 active channels (1–64) in a grid with values.
 
 static void draw_dmx_monitor() {
-    M5.Display.fillRect(0, 22, DISPLAY_WIDTH, DISPLAY_HEIGHT - 22, COL_BG);
-    M5.Display.setTextSize(1);
+    sprite.fillRect(0, 22, DISPLAY_WIDTH, DISPLAY_HEIGHT - 22, COL_BG);
+    sprite.setTextSize(1);
 
     // 8 columns × 8 rows = 64 channels
     int cols = 8;
@@ -126,31 +136,34 @@ static void draw_dmx_monitor() {
 
             // Background intensity proportional to value
             uint8_t br = val >> 3;  // 0–31 range for 565 green channel
-            uint16_t bg = (br > 0) ? M5.Display.color565(0, val / 4, val / 8) : COL_CELL_BG;
-            M5.Display.fillRect(x + 1, y + 1, cell_w - 2, cell_h - 2, bg);
+            uint16_t bg = (br > 0) ? sprite.color565(0, val / 4, val / 8) : COL_CELL_BG;
+            sprite.fillRect(x + 1, y + 1, cell_w - 2, cell_h - 2, bg);
 
             // Channel number (top-left of cell, small)
-            M5.Display.setTextColor(COL_DIM, bg);
-            M5.Display.setCursor(x + 2, y + 2);
-            M5.Display.printf("%d", ch);
+            sprite.setTextColor(COL_DIM, bg);
+            sprite.setCursor(x + 2, y + 2);
+            sprite.printf("%d", ch);
 
             // Value (centred in cell)
-            M5.Display.setTextColor(COL_TEXT, bg);
-            M5.Display.setCursor(x + 2, y + cell_h / 2);
-            M5.Display.printf("%3d", val);
+            sprite.setTextColor(COL_TEXT, bg);
+            sprite.setCursor(x + 2, y + cell_h / 2);
+            sprite.printf("%3d", val);
         }
     }
 }
 
 // ==== Main Draw =============================================================
+// Compose the frame into the sprite, then push it to the LCD in one shot.
 
 inline void display_update() {
+    sprite.fillSprite(COL_BG);
     draw_header();
     if (current_view == VIEW_OSC_FEED) {
         draw_osc_feed();
     } else {
         draw_dmx_monitor();
     }
+    sprite.pushSprite(0, 0);
 }
 
 // ==== Touch Toggle ==========================================================
@@ -163,7 +176,6 @@ inline void display_check_touch() {
             current_view = (current_view == VIEW_OSC_FEED)
                            ? VIEW_DMX_MONITOR
                            : VIEW_OSC_FEED;
-            M5.Display.fillScreen(COL_BG);
         }
     }
 }

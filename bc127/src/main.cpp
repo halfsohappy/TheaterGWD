@@ -47,9 +47,15 @@ static int  osc_port = 8000;
 static void begin_udp(const String& ip_str, const String& ssid,
                        const String& password, int port) {
     if (ip_str != "dhcp") {
-        IPAddress static_ip;
+        IPAddress static_ip, gateway, subnet;
         static_ip.fromString(ip_str);
-        WiFi.config(static_ip);
+        // Derive a sensible default: gateway = x.x.x.1, subnet = /24.
+        // For non-standard topologies, set use_dhcp=true in the provisioner
+        // and rely on DHCP instead.
+        gateway = IPAddress(static_ip[0], static_ip[1], static_ip[2], 1);
+        subnet  = IPAddress(255, 255, 255, 0);
+        Serial.println("  Static IP: " + ip_str + "  GW: " + gateway.toString() + "  Mask: " + subnet.toString());
+        WiFi.config(static_ip, gateway, subnet);
     }
 
     WiFi.begin(ssid.c_str(), password.c_str());
