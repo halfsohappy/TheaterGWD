@@ -1,0 +1,27 @@
+[Unit]
+Description=Symon OSC Audio Player
+Documentation=https://github.com/halfsohappy/TheaterGWD
+After=network.target sound.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi
+
+# Edit ExecStart arguments to match your setup.
+# --audio-dir  path to your audio files (default ~/audio)
+# --port       OSC listen port          (default 8000)
+# --reply-host IP address of the machine that should receive OSC replies
+# --reply-port port on that machine      (default 9000)
+ExecStart=/home/pi/symon/venv/bin/python3 /home/pi/symon/symon.py \
+    --audio-dir /home/pi/audio \
+    --port 8000
+
+Restart=on-failure
+RestartSec=5
+
+# Give the audio subsystem a moment to become ready after boot
+ExecStartPre=/bin/sleep 2
+
+[Install]
+WantedBy=multi-user.target
